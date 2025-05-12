@@ -1,0 +1,2 @@
+recursive-include ctf4science/config/*
+recursive-include data/*

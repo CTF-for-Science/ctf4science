@@ -1,0 +1,10 @@
+figure_size: [10, 6]
+colors:
+  truth: 'blue'          # Fixed color for ground truth
+  predictions: 'cividis' # Colormap for predictions
+linestyles:
+  truth: '-'
+  predictions: '--'
+images:
+  colormap: 'hot'
+font_size: 12
