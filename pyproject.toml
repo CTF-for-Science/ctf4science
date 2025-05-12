@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools >= 64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ctf4science"
+version = "0.11"
+authors = [
+    {name = "AI Institute in Dynamic Systems"}
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "importlib-resources",
+    "pyyaml",
+]
+requires-python = ">=3.6"
+description = "A framework for benchmarking modeling methods on chaotic systems"
+
+[project.urls]
+Homepage = "https://github.com/CTF-for-Science/ctf4science"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["*"]
+exclude = []
+namespaces = true
+
+[project.optional-dependencies]
+all = ["jupyterlab","ray[data,train,tune,serve]"]
+notebooks = ["jupyterlab"]
+optuna = ["optuna"]
+ray = ["ray[data,train,tune,serve]"]
+

@@ -1,0 +1,92 @@
+type: dynamical
+evaluation_params:
+  k: 20
+  modes: 500
+  bins: 41
+pairs:
+  - id: 1 # E1 & E2
+    train: [X1train.mat]
+    test: X1test.mat
+    metrics: [short_time, long_time]
+  - id: 2 # E3
+    train: [X2train.mat]
+    test: X2test.mat
+    metrics: [reconstruction]
+  - id: 3 # E4
+    train: [X2train.mat]
+    test: X3test.mat
+    metrics: [long_time]
+  - id: 4 # E5
+    train: [X3train.mat]
+    test: X4test.mat
+    metrics: [reconstruction]
+  - id: 5 # E6
+    train: [X3train.mat]
+    test: X5test.mat
+    metrics: [long_time]
+  - id: 6 # E7 & E8
+    train: [X4train.mat]
+    test: X6test.mat
+    metrics: [short_time, long_time]
+  - id: 7 # E9 & E10
+    train: [X5train.mat]
+    test: X7test.mat
+    metrics: [short_time, long_time]
+  - id: 8 # E11
+    train: [X6train.mat, X7train.mat, X8train.mat]
+    test: X8test.mat
+    initialization: X9train.mat
+    metrics: [short_time]
+  - id: 9 # E12
+    train: [X6train.mat, X7train.mat, X8train.mat]
+    test: X9test.mat
+    initialization: X10train.mat
+    metrics: [short_time]
+metadata:
+  delta_t: 0.05
+  spatial_dimension: 3
+  matrix_shapes:
+    X1test.mat: [1000, 3]
+    X2test.mat: [10000, 3]
+    X3test.mat: [1000, 3]
+    X4test.mat: [10000, 3]
+    X5test.mat: [1000, 3]
+    X6test.mat: [1000, 3]
+    X7test.mat: [1000, 3]
+    X8test.mat: [1000, 3]
+    X9test.mat: [1000, 3]
+    X1train.mat: [10000, 3]
+    X2train.mat: [10000, 3]
+    X3train.mat: [10000, 3]
+    X4train.mat: [100, 3]
+    X5train.mat: [100, 3]
+    X6train.mat: [10000, 3]
+    X7train.mat: [10000, 3]
+    X8train.mat: [10000, 3]
+    X9train.mat: [100, 3]
+    X10train.mat: [100, 3]
+  matrix_start_index:
+    X1test.mat: 10000
+    X2test.mat: 0
+    X3test.mat: 10000
+    X4test.mat: 0
+    X5test.mat: 10000
+    X6test.mat: 100
+    X7test.mat: 100
+    X8test.mat: 10000
+    X9test.mat: 10000
+    X1train.mat: 0
+    X2train.mat: 0
+    X3train.mat: 0
+    X4train.mat: 0
+    X5train.mat: 0
+    X6train.mat: 0
+    X7train.mat: 0
+    X8train.mat: 0
+    X9train.mat: 9900
+    X10train.mat: 9900
+evaluations:
+  long_time: histogram_L2_error
+visualizations:
+  - trajectories
+  - histograms

@@ -1,0 +1,42 @@
+[submodule "models/sindy"]
+	path = models/sindy
+	url = git@github.com:CTF-for-Science/sindy.git
+[submodule "models/esn_ctf"]
+	path = models/esn_ctf
+	url = git@github.com:CTF-for-Science/esn_ctf.git
+[submodule "models/deeponet"]
+	path = models/deeponet
+	url = git@github.com:CTF-for-Science/deeponet.git
+[submodule "models/ctf_koopman"]
+	path = models/ctf_koopman
+	url = git@github.com:CTF-for-Science/ctf_koopman.git
+[submodule "models/ar_model"]
+	path = models/ar_model
+	url = git@github.com:CTF-for-Science/ar_model.git
+[submodule "models/PINN"]
+	path = models/PINN
+	url = git@github.com:CTF-for-Science/PINN.git
+[submodule "models/LTSF-Linear-Main"]
+	path = models/LTSF-Linear-Main
+	url = git@github.com:CTF-for-Science/LTSF-Linear-Main.git
+[submodule "models/KAN"]
+	path = models/KAN
+	url = git@github.com:CTF-for-Science/KAN.git
+[submodule "models/DMDvariants"]
+	path = models/DMDvariants
+	url = git@github.com:CTF-for-Science/DMDvariants.git
+[submodule "models/ode-lstms"]
+	path = models/ode-lstms
+	url = git@github.com:CTF-for-Science/ode-lstms.git
+[submodule "models/spacetime"]
+	path = models/spacetime
+	url = git@github.com:CTF-for-Science/spacetime.git
+[submodule "models/CTF_NaiveBaselines"]
+	path = models/CTF_NaiveBaselines
+	url = git@github.com:CTF-for-Science/CTF_NaiveBaselines.git
+[submodule "models/ctf_fno"]
+	path = models/ctf_fno
+	url = git@github.com:CTF-for-Science/ctf_fno.git
+[submodule "models/neural_ode"]
+	path = models/neural_ode
+	url = git@github.com:CTF-for-Science/neural_ode.git

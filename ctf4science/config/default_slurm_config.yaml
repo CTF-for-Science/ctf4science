@@ -1,0 +1,47 @@
+# Basic SLURM configuration for hyperparameter tuning
+
+# Node resources
+time: "24:00:00"  # Maximum runtime (HH:MM:SS)
+mem: 720          # Memory per node in GB
+num_cpu: 64       # Total CPUs per node
+num_gpu: 4        # Total GPUs per node
+partition: "gpu"  # SLURM partition to use
+
+# Ray cluster configuration
+ray:
+  # Head node
+  head_node:
+    cpu: 16      # CPUs for head node
+    memory: 64    # Memory for head node in GB
+  
+  # Worker nodes (where training happens)
+  worker_nodes:
+    cpu: 64      # CPUs per worker node
+    gpu: 4       # GPUs per worker node
+  
+  # Multi-node configuration (optional)
+  multi_node:
+    enabled: false    # Set to true to use multiple nodes
+    nodes: 1          # Number of GPU nodes to use
+    gpus_per_node: 4  # Number of GPUs per node
+    # Resource distribution for each trial
+    resources_per_trial:
+      cpu: 16         # CPUs per trial 
+      gpu: 1          # GPUs per trial
+      memory: 172     # Memory per trial in GB
+  
+  # Monitoring (optional)
+  include_dashboard: true  # Enable Ray dashboard for monitoring
+  dashboard_port: 8265    # Port for Ray dashboard
+
+# Advanced configuration
+# Uncomment and modify these if you need advanced control
+#   object_store_memory: null  # Auto-determined if null
+#   redis_max_memory: null     # Auto-determined if null
+#   system_config:
+#     object_spilling_threshold: 0.8
+#     local_gc_interval_s: 60
+#   logging:
+#     level: "INFO"
+#     rotation_bytes: 512MB
+#     rotation_backup_count: 5 
