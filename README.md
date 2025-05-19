@@ -13,22 +13,23 @@ Whether you're a researcher benchmarking a new method or a contributor adding a 
 
 ### Team:  
 
-| Name            | Email                   | Github         |
-|-----------------|-------------------------|----------------|
-| Philippe Wyder  | pwyder@uw.edu           | GitWyd         |
-| Judah Goldfeder | jag2396@columbia.edu    | Jgoldfeder     |
-| Alexey Yermakov | alexeyy@uw.edu          | yyexela        |
-| Yue Zhao        | yue.zhao@surf.nl        | yuezhao6371    |
-| Stefano Riva    | stefano.riva@polimi.it  | steriva        |
-| Jan Williams    | jmpw1@uw.edu            | Jan-Williams   |
-| David Zoro      | zorodav@uw.edu          | zorodav        |
-| Amy Sara Rude   | amysrude@uw.edu         | amysrude       |
-| Matteo Tomasetto| matteo.tomasetto@polimi.it | MatteoTomasetto |
-| Joe Germany     | jmg15@mail.aub.edu      | joeGermany     |
-| Joseph Bakarji  | jb50@aub.edu.lb         | josephbakarji  |
-| Georg Maierhofer| gam37@cam.ac.uk         | GeorgAUT       |
-| Miles Cranmer   | mc2473.cam.ac.uk@gmail.com | MilesCranmer |
-| Nathan Kutz     | kutz@uw.edu             | nathankutz     |
+| Name             | Email                           | Github           | Affiliation                          |
+|------------------|---------------------------------|------------------|--------------------------------------|
+| Philippe Wyder   | pwyder@uw.edu                   | GitWyd           | University of Washington             |
+| Judah Goldfeder  | jag2396@columbia.edu            | Jgoldfeder       | Columbia University                  |
+| Alexey Yermakov  | alexeyy@uw.edu                  | yyexela          | University of Washington             |
+| Yue Zhao         | yue.zhao@surf.nl                | yuezhao6371      | SURF (Netherlands)                   |
+| Stefano Riva     | stefano.riva@polimi.it          | steriva          | Politecnico di Milano                |
+| Jan Williams     | jmpw1@uw.edu                    | Jan-Williams     | University of Washington             |
+| David Zoro       | zorodav@uw.edu                  | zorodav          | University of Washington             |
+| Amy Sara Rude    | amysrude@uw.edu                 | amysrude         | University of Washington             |
+| Matteo Tomasetto | matteo.tomasetto@polimi.it      | MatteoTomasetto  | Politecnico di Milano                |
+| Joe Germany      | jmg15@mail.aub.edu              | joeGermany       | American University of Beirut        |
+| Joseph Bakarji   | jb50@aub.edu.lb                 | josephbakarji    | American University of Beirut        |
+| Georg Maierhofer | gam37@cam.ac.uk                 | GeorgAUT         | University of Cambridge              |
+| Miles Cranmer    | mc2473.cam.ac.uk@gmail.com      | MilesCranmer     | University of Cambridge              |
+| Nathan Kutz      | kutz@uw.edu                     | nathankutz       | University of Washington             |
+
 
 ## 🔧 Quickstart 
 
@@ -101,6 +102,8 @@ We welcome contributions! To add a new model or improve the framework, see the d
 
 Refer to [docs/developer_instructions.md](docs/developer_instructions).
 
+## Kaggle Page
+Check out the Dynamic AI Institute [Kaggle Page](https://www.kaggle.com/organizations/dynamics-ai), for datasets and upcoming contests.
 ## Papers that Inspired This Work
 
 - [Descending through a Crowded Valley - Benchmarking Deep Learning Optimizers](https://arxiv.org/abs/2007.01547)
