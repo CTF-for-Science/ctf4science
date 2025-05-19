@@ -1,6 +1,6 @@
 # CTF for Science Framework
 
-Welcome to the **CTF for Science Framework**, a modular and extensible platform designed for benchmarking modeling methods on chaotic systems. This framework supports the evaluation and comparison of models for systems like ordinary differential equations (ODEs, e.g., Lorenz system) and partial differential equations (PDEs, e.g., Kuramoto-Sivashinsky equation) using standardized datasets and metrics.
+Welcome to the **CTF for Science Framework**, a modular and extensible platform designed for benchmarking modeling methods on chaotic systems, from the [AI Institute in Dynamic Systems](https://dynamicsai.org/). This framework supports the evaluation and comparison of models for systems like ordinary differential equations (ODEs, e.g., Lorenz system) and partial differential equations (PDEs, e.g., Kuramoto-Sivashinsky equation) using standardized datasets and metrics.
 
 ## Overview
 
