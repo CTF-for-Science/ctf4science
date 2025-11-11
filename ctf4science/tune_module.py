@@ -75,6 +75,9 @@ class TuningRunner:
         self._validate_param_space(self.param_space)
         self.model_name = self.hp_config['model']['name']
         
+        # Parse and store pair_ids for objective function filtering
+        self.pair_ids = self._parse_pair_ids(self.hp_config['dataset'])
+        
         self.save_final_config = save_final_config
         self.metric = metric
         self.mode = mode
@@ -278,7 +281,8 @@ class TuningRunner:
             results_path.unlink(missing_ok=True)
             Path(config_path).unlink(missing_ok=True)
             
-            score = self._sum_results(results)
+            # Sum results only for the specified pair_ids
+            score = self._sum_results(results, pair_ids=self.pair_ids)
             # Return score with metric name
             return {self.metric: score}
             
@@ -287,22 +291,46 @@ class TuningRunner:
             # Return a very poor score to indicate failure
             return {self.metric: float('-inf') if self.mode == 'max' else float('inf')}
 
-    def _sum_results(self, results):
+    def _parse_pair_ids(self, dataset_config: Dict[str, Any]) -> Optional[List[int]]:
         """
-        Sums all metric values from a results dictionary containing evaluation metrics.
+        Parse the pair_id configuration to determine which pair_ids to optimize for.
         
-        Iterates through all pairs in the results dictionary and sums all metric values
-        found in each pair's 'metrics' dictionary. This is used to aggregate
-        evaluation metrics from a batch_results.yaml file.
-
         Args:
-            results (dict): A dictionary containing evaluation results.
+            dataset_config: The 'dataset' section from the config file.
         
         Returns:
-            float: The sum of all metric values across all pairs in the results dictionary.
+            Optional[List[int]]: A list of pair_ids to optimize for, or None if 'all' pairs should be used.
+        """
+        pair_id_config = dataset_config.get('pair_id', 'all')
+        
+        if pair_id_config == 'all':
+            return None
+        elif isinstance(pair_id_config, int):
+            return [pair_id_config]
+        elif isinstance(pair_id_config, list):
+            return pair_id_config
+        else:
+            raise ValueError(f"Invalid pair_id configuration: {pair_id_config}. Expected int, list of ints, or 'all'")
+
+    def _sum_results(self, results, pair_ids: Optional[List[int]] = None):
+        """
+        Sums metric values from a results dictionary containing evaluation metrics.
+        
+        If pair_ids is specified, only sums metrics from those specific pair_ids.
+        Otherwise, sums all metrics from all pairs.
+        
+        Args:
+            results (dict): A dictionary containing evaluation results.
+            pair_ids (Optional[List[int]]): List of pair_ids to include. If None, includes all pairs.
+        
+        Returns:
+            float: The sum of all metric values from the specified pair_ids (or all pairs if None).
         """
         total = 0
         for pair_dict in results['pairs']:
+            pair_id = pair_dict['pair_id']
+            if pair_ids is not None and pair_id not in pair_ids:
+                continue
             metric_dict = pair_dict['metrics']
             for metric in metric_dict.keys():
                 total += metric_dict[metric]
