@@ -1,0 +1,91 @@
+type: spatio-temporal
+evaluation_params:
+  k: 20
+  modes: 100
+pairs:
+  - id: 1 # E1 & E2
+    train: [X1train.npz]
+    test: X1test.npz
+    metrics: [short_time, long_time]
+  - id: 2 # E3
+    train: [X2train.npz]
+    test: X2test.npz
+    metrics: [reconstruction]
+  - id: 3 # E4
+    train: [X2train.npz]
+    test: X3test.npz
+    metrics: [long_time]
+  - id: 4 # E5
+    train: [X3train.npz]
+    test: X4test.npz
+    metrics: [reconstruction]
+  - id: 5 # E6
+    train: [X3train.npz]
+    test: X5test.npz
+    metrics: [long_time]
+  - id: 6 # E7 & E8
+    train: [X4train.npz]
+    test: X6test.npz
+    metrics: [short_time, long_time]
+  - id: 7 # E9 & E10
+    train: [X5train.npz]
+    test: X7test.npz
+    metrics: [short_time, long_time]
+  - id: 8 # E11
+    train: [X6train.npz, X7train.npz, X8train.npz]
+    test: X8test.npz
+    initialization: X9train.npz
+    metrics: [short_time]
+  - id: 9 # E12
+    train: [X6train.npz, X7train.npz, X8train.npz]
+    test: X9test.npz
+    initialization: X10train.npz
+    metrics: [short_time]
+metadata:
+    delta_t: 1.0
+    spatial_dimension: 3000  # Number of sensors
+    matrix_shapes:
+      X1train.npz: [2000, 3000]  # [time, sensors] Note that the original data is in [sensors, time] format.
+      X2train.npz: [2000, 3000]
+      X3train.npz: [2000, 3000]
+      X4train.npz: [500, 3000]
+      X5train.npz: [500, 3000]
+      X6train.npz: [2000, 3000]
+      X7train.npz: [2000, 3000]
+      X8train.npz: [2000, 3000]
+      X9train.npz: [500, 3000]
+      X10train.npz: [500, 3000]
+      X1test.npz: [1000, 3000]
+      X2test.npz: [2000, 3000]
+      X3test.npz: [1000, 3000]
+      X4test.npz: [2000, 3000]
+      X5test.npz: [1000, 3000]
+      X6test.npz: [1000, 3000]
+      X7test.npz: [1000, 3000]
+      X8test.npz: [1000, 3000]
+      X9test.npz: [1000, 3000]
+    matrix_start_index:
+      X1train.npz: 0
+      X2train.npz: 0
+      X3train.npz: 0
+      X4train.npz: 0
+      X5train.npz: 0
+      X6train.npz: 0
+      X7train.npz: 0
+      X8train.npz: 0
+      X9train.npz: 1500
+      X10train.npz: 1500
+      X1test.npz: 2000
+      X2test.npz: 0
+      X3test.npz: 2000
+      X4test.npz: 0
+      X5test.npz: 2000
+      X6test.npz: 500
+      X7test.npz: 500
+      X8test.npz: 2000
+      X9test.npz: 2000
+evaluations:
+    long_time: spectral_L2_error
+visualizations:
+  - psd
+  - 2d_comparison

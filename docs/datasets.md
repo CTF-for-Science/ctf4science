@@ -13,6 +13,7 @@ This document summarizes the core datasets used in the CTF for Science framework
 | Lorenz\_Official | Dynamical       | 0.05    | 3           | histogram\_L2\_error | trajectories, histograms |
 | KS\_Official     | Spatio-temporal | 0.025   | 1024        | spectral\_L2\_error  | psd, 2d\_comparison      |
 | seismo           | Spatio-temporal | 1.0     | 2048        | spectral\_L2\_error  | psd, 2d\_comparison      |
+| ocean\_das       | Spatio-temporal | 1.0     | 3000        | spectral\_L2\_error  | psd, 2d\_comparison      |
 
 ---
 
@@ -91,6 +92,27 @@ A spatio-temporal dataset of synthetic seismic waveforms generated using the Ins
   * Velocity seismograms (m/s) in vertical (Z) component
   * Synthetic earthquakes with randomized magnitude, location, etc.
   * Normalized for each earthquake event
+* **Relevant metrics**:
+
+  * ID 1: E1 (short\_time), E2 (long\_time)
+  * ID 2: E3 (reconstruction)
+  * ID 3: E4 (long\_time)
+  * ID 4: E5 (reconstruction)
+  * ID 5: E6 (long\_time)
+  * ID 6: E7, E8 (short\_time, long\_time)
+  * ID 7: E9, E10 (short\_time, long\_time)
+  * ID 8: E11 (short\_time)
+  * ID 9: E12 (short\_time)
+
+## ocean-das
+
+A spatio-temporal dataset using a novel geophysical sensing technology called DAS (Distributed Acoustic Sensing). This dataset is comprised of data from a shallow offshore DAS about 30m below sea level where surface gravity waves are particularly dispersive. The data is sampled at 5Hz but low-pass filtered to 1Hz.
+
+* **Time step**: 1.0
+* **Spatial dimension**: 3000
+* **Evaluation**: spectral L2 error for long-term behavior
+* **Data characteristics**:
+  * TODO
 * **Relevant metrics**:
 
   * ID 1: E1 (short\_time), E2 (long\_time)
