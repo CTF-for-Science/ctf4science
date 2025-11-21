@@ -68,8 +68,8 @@ metadata:
       X1train.npz: 0
       X2train.npz: 0
       X3train.npz: 0
-      X4train.npz: 0
-      X5train.npz: 0
+      X4train.npz: 1500
+      X5train.npz: 1500
       X6train.npz: 0
       X7train.npz: 0
       X8train.npz: 0
@@ -80,8 +80,8 @@ metadata:
       X3test.npz: 2000
       X4test.npz: 0
       X5test.npz: 2000
-      X6test.npz: 500
-      X7test.npz: 500
+      X6test.npz: 2000
+      X7test.npz: 2000
       X8test.npz: 2000
       X9test.npz: 2000
 evaluations:
