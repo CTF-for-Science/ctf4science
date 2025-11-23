@@ -58,3 +58,6 @@
 [submodule "models/ctf_panda"]
 	path = models/ctf_panda
 	url = git@github.com:CTF-for-Science/ctf_panda.git
+[submodule "models/SpatialTemporalModel"]
+	path = models/SpatialTemporalModel
+	url = https://github.com/joeGermany/SpatialTemporalModel.git
