@@ -35,7 +35,8 @@ class ModelTuner:
         asha_config: Optional[Dict[str, Any]] = None,  # Configuration for ASHA scheduler
         gpus_per_trial: int = 0,  # Number of GPUs to use per trial (0 means use all available)
         enable_performance_monitoring: bool = False,  # Whether to enable performance monitoring (average time per run)
-        performance_output_dir: Optional[str] = None  # Directory for performance results
+        performance_output_dir: Optional[str] = None,  # Directory for performance results
+        ray_results_dir: Optional[str] = None  # Directory for Ray temporary results
     ) -> None:
         """
         Initialize the ModelTuner with configuration file.
@@ -61,6 +62,7 @@ class ModelTuner:
             gpus_per_trial: Number of GPUs to use per trial (default: 0). Set to 0 to use all available GPUs.
             enable_performance_monitoring: Whether to enable performance monitoring (average time per run) (default: False).
             performance_output_dir: Directory for performance results. If None, uses default location.
+            ray_results_dir: Directory for Ray temporary results. If None, uses default ~/ray_results.
 
         Raises:
             ValueError: If config is missing required fields.
@@ -100,6 +102,7 @@ class ModelTuner:
             print(f"Note: Processing {len(self.pair_ids)} pair_ids ({self.pair_ids}). Each trial will take approximately {len(self.pair_ids)}x longer.")
         self.use_asha = use_asha
         self.gpus_per_trial = gpus_per_trial
+        self.ray_results_dir = ray_results_dir
         
         # Initialize output directory
         self.output_dir = self._construct_output_dir()
@@ -123,25 +126,36 @@ class ModelTuner:
         # Initialize Ray if not already initialized
         if not ray.is_initialized():
             try:
-                ray.init(
-                    ignore_reinit_error=self.ignore_reinit_error,
-                    include_dashboard=False,  # Disable dashboard for local runs
-                    _system_config={
+                ray_init_kwargs = {
+                    "ignore_reinit_error": self.ignore_reinit_error,
+                    "include_dashboard": False,  # Disable dashboard for local runs
+                    "_system_config": {
                         "object_spilling_threshold": 0.8,  # 80% memory threshold
                         "object_store_full_delay_ms": 100,  # Delay when store is full
                     }
-                )
+                }
+                
+                # Add custom results directory if specified
+                if self.ray_results_dir:
+                    ray_init_kwargs["_temp_dir"] = self.ray_results_dir
+                    
+                ray.init(**ray_init_kwargs)
                 resources = ray.cluster_resources()
                 print(f"Ray initialized successfully with resources:")
                 print(f"  - CPUs: {resources.get('CPU', 0)}")
                 print(f"  - GPUs: {resources.get('GPU', 0)}")
+                if self.ray_results_dir:
+                    print(f"  - Ray results directory: {self.ray_results_dir}")
             except Exception as e:
                 print(f"Warning: Ray initialization had issues: {str(e)}")
                 print("Attempting to continue with local execution...")
-                ray.init(
-                    ignore_reinit_error=self.ignore_reinit_error,
-                    local_mode=True  # Fall back to local mode if there are issues
-                )
+                ray_init_kwargs = {
+                    "ignore_reinit_error": self.ignore_reinit_error,
+                    "local_mode": True
+                }
+                if self.ray_results_dir:
+                    ray_init_kwargs["_temp_dir"] = self.ray_results_dir
+                ray.init(**ray_init_kwargs)
 
     def _construct_output_dir(self) -> Path:
         """
@@ -597,11 +611,17 @@ class ModelTuner:
             tune_config.time_budget_s = time_budget_s
             print(f"Using time budget: {self.time_budget_hours} hours")
         
-        tuner = tune.Tuner(
-            trainable,
-            param_space=param_dict,
-            tune_config=tune_config
-        )
+        # Create tuner with custom results directory
+        tuner_kwargs = {
+            "trainable": trainable,
+            "param_space": param_dict,
+            "tune_config": tune_config
+        }
+        
+        if self.ray_results_dir:
+            tuner_kwargs["run_config"] = tune.RunConfig(storage_path=self.ray_results_dir)
+        
+        tuner = tune.Tuner(**tuner_kwargs)
         
         # Run optimization
         results = tuner.fit()
@@ -689,6 +709,7 @@ class ModelTuner:
         # Basic arguments
         parser.add_argument("--config-path", help="Path to the model's config file")
         parser.add_argument("--model-name", help="Specific model to tune (optional, will be inferred from config file orcurrent directory if not provided)")
+        parser.add_argument("--ray-results-dir", help="Directory for Ray temporary results (default: ~/ray_results)")
         
         # Tuning parameters
         tuning_group = parser.add_argument_group('Tuning Parameters')
@@ -780,7 +801,8 @@ class ModelTuner:
                     metric=args.metric,
                     gpus_per_trial=args.gpus_per_trial,
                     enable_performance_monitoring=args.enable_performance_monitoring,
-                    performance_output_dir=args.performance_output_dir
+                    performance_output_dir=args.performance_output_dir,
+                    ray_results_dir=args.ray_results_dir
                 )
                 tuner.run_optimization()
             except Exception as e:
