@@ -16,16 +16,17 @@ top_dir = Path(__file__).parent.parent
 class ModelBenchmarker:
     """
     Benchmarks a model with optimal hyperparameters for a given dataset and pair_id.
-    Runs 5 independent training and evaluation runs with different random seeds.
+    Runs multiple independent training and evaluation runs with different random seeds.
     Designed to be run from within each model directory.
     """
     
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: str, num_runs: int = 5):
         """
         Initialize the benchmarker.
         
         Args:
             config_path: Path to the configuration file
+            num_runs: Number of independent evaluation runs to perform (default: 5)
         """
         self.config_path = Path(config_path)
         if not self.config_path.exists():
@@ -67,7 +68,7 @@ class ModelBenchmarker:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # Number of independent runs
-        self.num_runs = 5
+        self.num_runs = num_runs
         
         print(f"Initialized benchmarker for {self.model_name}")
         print(f"Dataset: {self.dataset_name}")
@@ -136,7 +137,7 @@ class ModelBenchmarker:
         Run a single evaluation of the model.
         
         Args:
-            run_idx: Index of the run (0-4)
+            run_idx: Index of the run
             seed: Random seed for this run
             
         Returns:
@@ -195,7 +196,7 @@ class ModelBenchmarker:
         Find and load the results from a specific run.
         
         Args:
-            run_idx: Index of the run (0-4)
+            run_idx: Index of the run
             
         Returns:
             Dictionary containing the evaluation results
@@ -232,7 +233,7 @@ class ModelBenchmarker:
     
     def run_benchmark(self) -> Dict[str, Any]:
         """
-        Run 5 benchmarking evaluations.
+        Run multiple benchmarking evaluations.
         
         Returns:
             Dictionary containing all benchmark results and statistics
@@ -244,12 +245,18 @@ class ModelBenchmarker:
         perf_monitor.start_monitoring()
         
         # Use different seeds for each run
-        seeds = [42, 123, 2025, 777, 1337]
+        # Generate seeds: start with predefined ones, then generate more if needed
+        base_seeds = [42, 123, 2025, 777, 1337, 999, 2024, 314, 271, 1618]
+        if self.num_runs <= len(base_seeds):
+            seeds = base_seeds[:self.num_runs]
+        else:
+            # If more runs than base seeds, extend with generated seeds
+            seeds = base_seeds + [1000 + i for i in range(self.num_runs - len(base_seeds))]
         
         all_runs = []
         successful_runs = 0
         
-        # Run 5 evaluations
+        # Run evaluations
         for run_idx in range(self.num_runs):
             seed = seeds[run_idx]
             
@@ -276,10 +283,17 @@ class ModelBenchmarker:
         # Stop performance monitoring
         perf_summary = perf_monitor.stop_monitoring()
         
-        # Calculate statistics if all 5 runs are successful
+        # Extract run results from successful runs
+        run_results = self._extract_run_results(all_runs)
+        
+        # Calculate statistics only when we have 3+ successful runs
+        statistics = {}
         if successful_runs == self.num_runs:
-            print(f"\n✅ All {self.num_runs} runs successful! Calculating statistics...")
-            statistics = self._calculate_statistics(all_runs)
+            if self.num_runs >= 3:
+                print(f"\n✅ All {self.num_runs} runs successful! Calculating statistics...")
+                statistics = self._calculate_statistics(all_runs)
+            else:
+                print(f"\n✅ All {self.num_runs} runs successful! Run results recorded (statistics require 3+ runs).")
         else:
             print(f"\n❌ Only {successful_runs} runs successful. Skipping statistics.")
             statistics = {'error': f'Only {successful_runs}/{self.num_runs} runs successful'}
@@ -293,6 +307,7 @@ class ModelBenchmarker:
             'planned_num_runs': self.num_runs,
             'successful_runs': successful_runs,
             'actual_num_runs': len(all_runs),
+            'run_results': run_results,
             'statistics': statistics,
             'performance_summary': perf_summary,
             'timestamp': datetime.now().isoformat()
@@ -311,9 +326,33 @@ class ModelBenchmarker:
         
         return benchmark_results
     
+    def _extract_run_results(self, all_runs: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Extract run results for each successful run.
+        
+        Args:
+            all_runs: List of all run results
+            
+        Returns:
+            Dictionary containing run results for each successful run, keyed by run identifier
+        """
+        successful_runs = [run for run in all_runs if run.get('success', False) and 'results' in run]
+        
+        if not successful_runs:
+            return {}
+        
+        return {
+            f"run_{run['run_idx'] + 1}_seed_{run['seed']}": {
+                'results': run['results'],
+                'duration': run['duration']
+            }
+            for run in successful_runs
+        }
+    
     def _calculate_statistics(self, all_runs: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Calculate mean and standard deviation for all metrics across all runs.
+        Requires at least 3 successful runs.
         
         Args:
             all_runs: List of all run results
@@ -321,32 +360,24 @@ class ModelBenchmarker:
         Returns:
             Dictionary containing statistics for all metrics
         """
-        statistics = {}
-        
-        # Filter to only successful runs that have results
         successful_runs = [run for run in all_runs if run.get('success', False) and 'results' in run]
         
-        if not successful_runs:
-            return {'error': 'No successful runs to calculate statistics from'}
+        if len(successful_runs) < 3:
+            return {'error': f'Need at least 3 successful runs for statistics, got {len(successful_runs)}'}
+        
+        statistics = {}
         
         # Get all metric names from the first successful run
-        first_run_results = successful_runs[0]['results']
+        metric_names = list(successful_runs[0]['results'].keys())
         
         # Calculate statistics for each metric
-        metric_names = list(first_run_results.keys())
-        
         for metric_name in metric_names:
-            # Collect values from all successful runs
-            values = []
-            for run in successful_runs:
-                if metric_name in run['results']:
-                    values.append(run['results'][metric_name])
-            
-            if values and len(values) >= 3:  # Need at least 3 successful runs
+            values = [run['results'][metric_name] for run in successful_runs if metric_name in run['results']]
+            if values:
                 statistics[f'{metric_name}_mean'] = float(np.mean(values))
                 statistics[f'{metric_name}_std'] = float(np.std(values))
         
-        # Add timing statistics from successful runs only
+        # Add timing statistics
         durations = [run['duration'] for run in successful_runs]
         statistics['timing'] = {
             'duration_mean': float(np.mean(durations)),
@@ -359,11 +390,12 @@ def main():
     """Main function for command line usage."""
     parser = argparse.ArgumentParser(description="Benchmark a CTF model with optimal hyperparameters")
     parser.add_argument("--config", required=True, help="Path to the configuration file")
+    parser.add_argument("--num-evals", type=int, default=5, help="Number of independent evaluation runs to perform (default: 5)")
     
     args = parser.parse_args()
     
     try:
-        benchmarker = ModelBenchmarker(args.config)
+        benchmarker = ModelBenchmarker(args.config, num_runs=args.num_evals)
         results = benchmarker.run_benchmark()
         
         print(f"\nBenchmark completed!")
