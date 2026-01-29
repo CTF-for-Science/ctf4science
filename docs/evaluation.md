@@ -13,20 +13,20 @@ This document outlines each metric's purpose, method of evaluation, and its corr
 ---
 ## Summary Table
 
-| Metric | Name                                  | Task Scenario          | Input Noise | Data Regime | Forecast Type | Dataset Pair ID |
-| ------ | ------------------------------------- | ---------------------- | ----------- | ----------- | ------------- | --------------- |
-| E1     | Short-Time Forecast Accuracy          | Baseline               | None        | Full        | Short-term    | 1               |
-| E2     | Long-Time Forecast Accuracy           | Baseline               | None        | Full        | Long-term     | 1               |
-| E3     | Reconstruction (Medium Noise)         | Medium-noise denoising | Medium      | Full        | N/A           | 2               |
-| E4     | Short-Time Forecast (Medium Noise)    | Forecast from noise    | Medium      | Full        | Short-term    | 3               |
-| E5     | Reconstruction (High Noise)           | High-noise denoising   | High        | Full        | N/A           | 4               |
-| E6     | Short-Time Forecast (High Noise)      | Forecast from noise    | High        | Full        | Short-term    | 5               |
-| E7     | Short-Time Forecast (Low Data, Clean) | Few-shot clean         | None        | Sparse      | Short-term    | 6               |
-| E8     | Long-Time Forecast (Low Data, Clean)  | Few-shot clean         | None        | Sparse      | Long-term     | 6               |
-| E9     | Short-Time Forecast (Low Data, Noisy) | Few-shot noisy         | Medium/High | Sparse      | Short-term    | 7               |
-| E10    | Long-Time Forecast (Low Data, Noisy)  | Few-shot noisy         | Medium/High | Sparse      | Long-term     | 7               |
-| E11    | Parametric Gen. (Interpolation)       | Interpolation across λ | None        | Full        | Short-term    | 8               |
-| E12    | Parametric Gen. (Extrapolation)       | Extrapolation beyond λ | None        | Full        | Short-term    | 9               |
+| Metric | Name                                  | Task Scenario          | Input Noise | Data Regime | Forecast Type | Evaluation Type | Dataset Pair ID |
+| ------ | ------------------------------------- | ---------------------- | ----------- | ----------- | ------------- | --------------- | --------------- |
+| E1     | Short-Time Forecast Accuracy          | Baseline               | None        | Full        | Short-term    | Short-time      | 1               |
+| E2     | Long-Time Forecast Accuracy           | Baseline               | None        | Full        | Long-term     | Long-time       | 1               |
+| E3     | Reconstruction (Medium Noise)         | Medium-noise denoising | Medium      | Full        | N/A           | Short-time      | 2               |
+| E4     | Short-Time Forecast (Medium Noise)    | Forecast from noise    | Medium      | Full        | Short-term    | Long-time       | 3               |
+| E5     | Reconstruction (High Noise)           | High-noise denoising   | High        | Full        | N/A           | Short-time      | 4               |
+| E6     | Short-Time Forecast (High Noise)      | Forecast from noise    | High        | Full        | Short-term    | Long-time       | 5               |
+| E7     | Short-Time Forecast (Low Data, Clean) | Few-shot clean         | None        | Sparse      | Short-term    | Short-time      | 6               |
+| E8     | Long-Time Forecast (Low Data, Clean)  | Few-shot clean         | None        | Sparse      | Long-term     | Long-time       | 6               |
+| E9     | Short-Time Forecast (Low Data, Noisy) | Few-shot noisy         | Medium/High | Sparse      | Short-term    | Short-time      | 7               |
+| E10    | Long-Time Forecast (Low Data, Noisy)  | Few-shot noisy         | Medium/High | Sparse      | Long-term     | Long-time       | 7               |
+| E11    | Parametric Gen. (Interpolation)       | Interpolation across λ | None        | Full        | Short-term    | Short-time      | 8               |
+| E12    | Parametric Gen. (Extrapolation)       | Extrapolation beyond λ | None        | Full        | Short-term    | Short-time      | 9               |
 
 
 ---
