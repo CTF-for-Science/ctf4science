@@ -278,14 +278,14 @@ def evaluate_custom(dataset_name: str, pair_id: int, truth: np.ndarray, predicti
     results = {}
     for metric in metrics:
         if metric == 'short_time':
-            results['short_time'] = short_time_forecast(truth, prediction, evaluation_params['k'])
+            results['short_time'] = short_time_forecast(truth, prediction, evaluation_params['k_short'])
         elif metric == 'long_time':
             long_time_eval_type = config['evaluations']['long_time']
             if long_time_eval_type == 'histogram_L2_error':
                 results['long_time'] = long_time_forecast_dynamical(truth, prediction, evaluation_params['modes'],
                                                                     evaluation_params['bins'])
             elif long_time_eval_type == 'spectral_L2_error':
-                results['long_time'] = long_time_forecast_spatio_temporal(truth, prediction, evaluation_params['k'],
+                results['long_time'] = long_time_forecast_spatio_temporal(truth, prediction, evaluation_params['k_long'],
                                                                           evaluation_params['modes'])
             else:
                 raise ValueError(f"Unknown dataset long time evaluation type: {long_time_eval_type}")

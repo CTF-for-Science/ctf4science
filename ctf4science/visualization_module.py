@@ -255,7 +255,7 @@ class Visualization:
             bins = eval_params.get('bins', 50)
             return self.plot_histograms(test_data, predictions, modes, bins, labels=['Model Prediction'], **kwargs)
         elif plot_type == 'psd':
-            k = eval_params.get('k', 20)
+            k = eval_params.get('k_long', 20)
             modes = eval_params.get('modes', 100)
             return self.plot_psd(test_data, predictions, k, modes, labels=['Model Prediction'], **kwargs)
         elif plot_type == 'errors':
