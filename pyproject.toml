@@ -1,10 +1,12 @@
 [build-system]
-requires = ["setuptools >= 64"]
-build-backend = "setuptools.build_meta"
+build-backend = "hatchling.build"
+requires = [
+    "hatchling",
+]
 
 [project]
 name = "ctf4science"
-version = "0.11"
+version = "0.2"
 authors = [
     {name = "AI Institute in Dynamic Systems"}
 ]
@@ -14,6 +16,7 @@ dependencies = [
     "matplotlib",
     "importlib-resources",
     "pyyaml",
+    "seaborn"
 ]
 requires-python = ">=3.6"
 description = "A framework for benchmarking modeling methods on chaotic systems"
@@ -38,5 +41,19 @@ all = ["jupyterlab","ray[data,train,tune,serve]","plotly"]
 notebooks = ["jupyterlab"]
 optuna = ["optuna"]
 ray = ["ray[data,train,tune,serve]"]
-plotting = ["gspread","google-auth","google-auth-oauthlib","google-auth-httplib2","pandas","seaborn"]
+plotting = ["gspread","google-auth","google-auth-oauthlib","google-auth-httplib2","pandas"]
+dev  = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "sphinx>=9.1.0",
+    "numpydoc>=1.10.0",
+    "pyrefly>=0.52.0",
+    "ruff>=0.15.0",
+    "pre-commit>=4.5.1",
+    "hatch>=1.16.3",
+    "hatchling>=1.28.0",
+    "pydata-sphinx-theme>=0.16.1",
+    "nox>=2026.2.9",
+    "sphinx-design>=0.7.0"
+]
 

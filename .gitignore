@@ -187,3 +187,5 @@ notebooks/*.csv
 notebooks/*.pdf
 notebooks/*.tex
 data/
+docs/source/generated
+docs/build

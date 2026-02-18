@@ -2,6 +2,8 @@
 
 Welcome to the **CTF for Science Framework**, a modular and extensible platform designed for benchmarking modeling methods on chaotic systems, from the [AI Institute in Dynamic Systems](https://dynamicsai.org/). This framework supports the evaluation and comparison of models for systems like ordinary differential equations (ODEs, e.g., Lorenz system) and partial differential equations (PDEs, e.g., Kuramoto-Sivashinsky equation) using standardized datasets and metrics.
 
+Website: [ctf-for-science.github.io/ctf4science/](https://ctf-for-science.github.io/ctf4science/)
+
 ## Overview
 
 The framework provides:
@@ -31,7 +33,7 @@ Whether you're a researcher benchmarking a new method or a contributor adding a 
 | Nathan Kutz      | kutz@uw.edu                     | nathankutz       | University of Washington             |
 
 
-## 🔧 Quickstart 
+## Quickstart 
 
 Run a simple experiment on the Lorenz dataset with naive baselines:
 
@@ -84,7 +86,7 @@ results/<dataset>/<model>/<batch_id>/
 
 ## Getting Started With Your Own Model
 
-To install and start using the framework, follow the instructions in [docs/getting_started.md](docs/getting_started.md). This guide covers:
+To install and start using the framework, follow the instructions in [ctf-for-science.github.io/ctf4science/getting_started.html](https://ctf-for-science.github.io/ctf4science/getting_started.html). This guide covers:
 - Installation steps.
 - Running a quick example with a baseline model.
 - Adding your own model to the framework.
@@ -94,17 +96,16 @@ To install and start using the framework, follow the instructions in [docs/getti
 - `data/`: Contains datasets from our [OSF page](https://osf.io/6rzhm/overview).
 - `models/`: Contains model implementations (e.g., baselines and user-contributed models).
 - `results/`: Stores model predictions, evaluation results, and visualizations.
-- `docs/`: Additional documentation (e.g., contributing, configuration).
 - `notebooks/`: Jupyter notebooks to analyze or visualize results.
-- `tests/`: Contains unit tests for the `ctf4science` package.
+- `test/`: Contains unit tests for the `ctf4science` package.
 
 ## Contributing a Model
 
-We welcome contributions! To add a new model or improve the framework, see the detailed steps in [docs/getting_started.md#contributing-a-new-model](docs/getting_started.md#contributing-a-new-model).
+We welcome contributions! To add a new model or improve the framework, see the detailed steps in [ctf-for-science.github.io/ctf4science/getting_started.html#contributing-a-new-model](https://ctf-for-science.github.io/ctf4science/getting_started.html#contributing-a-new-model).
 
 ## Contributing to the ctf4science Package
 
-Refer to [docs/developer_instructions.md](docs/developer_instructions).
+Refer to [ctf-for-science.github.io/ctf4science/contributing.html](https://ctf-for-science.github.io/ctf4science/contributing.html).
 
 ## Kaggle Page
 Check out the Dynamic AI Institute [Kaggle Page](https://www.kaggle.com/organizations/dynamics-ai), for datasets and upcoming contests.

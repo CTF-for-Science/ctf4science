@@ -1,0 +1,13 @@
+line-length=120
+include=["ctf4science/**/*.py", "tests/**/*.py"]
+exclude=["models/**", "**/*.ipynb"]
+
+[format]
+line-ending = "lf"
+docstring-code-format = true
+docstring-code-line-length = 20
+
+[lint]
+preview = true
+
+ignore = []

@@ -1,0 +1,10 @@
+project-includes = [
+    "**/*.py*",
+]
+
+project-excludes = [
+   "models/*",
+   "results/*",
+   "data/*",
+   "**/*.ipynb"
+]

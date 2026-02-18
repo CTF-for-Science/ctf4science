@@ -1,0 +1,17 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.0
+    hooks:
+    -   id: ruff-check # Linter
+        name: Ruff (linter)
+    -   id: ruff-format # Formatter
+        name: Ruff (formatter)
+-   repo: https://github.com/facebook/pyrefly-pre-commit
+    rev: 0.51.2  # Note: this is the version of the pre-commit hook, NOT the pyrefly version used for type checking
+    hooks:
+      - id: pyrefly-check
+        name: Pyrefly (type checking)
+        pass_filenames: false  # Recommended to do full repo checks. However, you can change this to `true` to only check changed files
+        language: system  # Use system-installed pyrefly

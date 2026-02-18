@@ -1,0 +1,40 @@
+# This workflow will install Python dependencies, run the linter and check formatting on the code.
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+
+name: Linter
+
+on:
+  push:
+    branches:
+      - "**"
+      - "!main"
+      - "!gh-pages"
+    paths: # Only run linting and formatting for changes to the CTF4Science package
+      - 'ctf4science/**'
+      - 'test/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint_format:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13.7"]
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    - name: Install dependencies 
+      run: |
+        pip install nox
+    - name: Run linting and formatting
+      run: |
+        nox -s lint
+        nox -s format

@@ -1,0 +1,9 @@
+[pytest]
+minversion = "9.0"
+addopts = ["-ra", "-l", "--maxfail=1"]
+pythonpath = ["."]
+filterwarnings = [
+    "error",
+]
+testpaths = ["test"]
+norecursedirs = [".git", "__pycache__", "models"]

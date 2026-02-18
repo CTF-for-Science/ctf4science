@@ -1,4 +1,9 @@
-import os
+"""
+Evaluation Module for CTF models, provides evaluation metrics and routines for CTF datasets.
+
+This module handles evaluation of CTF models against a hidden test set. It also assesses model stability by running models multiple times with different random seeds.
+"""
+
 import yaml
 import numpy as np
 from pathlib import Path
@@ -8,19 +13,30 @@ from typing import Dict, Any, Optional, List
 file_dir = Path(__file__).parent
 top_dir = Path(__file__).parent.parent
 
+
 def extract_metrics_in_order(dataset_name: str, batch_results: Dict[str, Any]) -> List[float]:
-    """
-    Extract metric values from batch_results in the order defined by the dataset configuration.
+    r"""Extract metric values from batch results in the order defined by the dataset config.
 
-    Args:
-        dataset_name (str): Name of the dataset (e.g., "PDE_KS").
-        batch_results (Dict[str, Any]): Dictionary loaded from batch_results.yaml.
+    Pairs are processed in ascending ``pair_id``; within each pair, metrics
+    follow the order in the dataset configuration.
 
-    Returns:
-        List[float]: List of metric values in the order specified by the dataset config.
+    Parameters
+    ----------
+    dataset_name : str
+        Name of the dataset (e.g. ``'PDE_KS'``).
+    batch_results : dict
+        Dictionary loaded from batch results (e.g. ``batch_results.yaml``),
+        with a ``pairs`` list keyed by ``pair_id`` and ``metrics``.
 
-    Raises:
-        ValueError: If a pair or metric is missing in batch_results.
+    Returns
+    -------
+    list of float
+        Metric values in the order specified by the dataset config.
+
+    Raises
+    ------
+    ValueError
+        If a pair or metric is missing in `batch_results`.
     """
     # Load dataset configuration
     config = get_config(dataset_name)
@@ -47,91 +63,116 @@ def extract_metrics_in_order(dataset_name: str, batch_results: Dict[str, Any]) -
 
     return metric_values
 
+
 def short_time_forecast(truth: np.ndarray, prediction: np.ndarray, k: int) -> float:
-    """
-    Compute the short-time forecast error.
+    r"""Compute the short-time forecast score (relative L2 over first k steps, as percentage).
 
-    This function calculates the relative L2 norm of the difference between the first k time steps
-    of the truth and prediction arrays, scaled to a percentage.
+    Uses the first `k` time steps of `truth` and `prediction`; score is
+    ``100 * (1 - relative_L2_error)`` so that 100 is perfect.
 
-    Args:
-        truth (np.ndarray): Ground truth data array with shape (time steps, features).
-        prediction (np.ndarray): Predicted data array with shape (time steps, features).
-        k (int): Number of initial time steps to consider.
+    Parameters
+    ----------
+    truth : (T, F) ndarray
+        Ground truth, shape (time steps, features).
+    prediction : (T, F) ndarray
+        Predicted data, same shape as `truth`.
+    k : int
+        Number of initial time steps to use.
 
-    Returns:
-        float: Short-time forecast score as a percentage.
+    Returns
+    -------
+    float
+        Short-time forecast score as a percentage (100 = perfect).
     """
     Est = np.linalg.norm(truth[:k, :] - prediction[:k, :], ord=2) / np.linalg.norm(truth[:k, :], ord=2)
     return float(100 * (1 - Est))
 
+
 def reconstruction(truth: np.ndarray, prediction: np.ndarray) -> float:
-    """
-    Compute the reconstruction error.
+    r"""Compute the reconstruction score (relative L2 over full trajectory, as percentage).
 
-    This function calculates the relative L2 norm of the difference between the entire truth and
-    prediction arrays, scaled to a percentage.
+    Score is ``100 * (1 - relative_L2_error)`` so that 100 is perfect.
 
-    Args:
-        truth (np.ndarray): Ground truth data array with shape (time steps, features).
-        prediction (np.ndarray): Predicted data array with shape (time steps, features).
+    Parameters
+    ----------
+    truth : (T, F) ndarray
+        Ground truth, shape (time steps, features).
+    prediction : (T, F) ndarray
+        Predicted data, same shape as `truth`.
 
-    Returns:
-        float: Reconstruction score as a percentage.
+    Returns
+    -------
+    float
+        Reconstruction score as a percentage (100 = perfect).
     """
     Est = np.linalg.norm(truth - prediction, ord=2) / np.linalg.norm(truth, ord=2)
     return float(100 * (1 - Est))
 
+
 def long_time_forecast_dynamical(truth: np.ndarray, prediction: np.ndarray, modes: int, bins: int) -> float:
+    r"""Compute the long-time forecast score for dynamical systems (histogram-based).
+
+    Uses the last `modes` time steps per feature, builds L1-normalized histograms
+    with `bins` bins, and compares truth vs prediction. Score is
+    ``100 * (1 - relative_L1_error)`` so that 100 is perfect.
+
+    Parameters
+    ----------
+    truth : (T, F) ndarray
+        Ground truth, shape (time steps, features).
+    prediction : (T, F) ndarray
+        Predicted data, same shape as `truth`.
+    modes : int
+        Number of last time steps to use per feature.
+    bins : int
+        Number of histogram bins.
+
+    Returns
+    -------
+    float
+        Long-time forecast score as a percentage (100 = perfect).
     """
-    Compute the long-time forecast error for dynamical systems.
-
-    This function calculates the error based on histograms of the last 'modes' time steps for each
-    feature, comparing the L-1 normalized histograms of truth and prediction.
-
-    Args:
-        truth (np.ndarray): Ground truth data array with shape (time steps, features).
-        prediction (np.ndarray): Predicted data array with shape (time steps, features).
-        modes (int): Number of last time steps to consider.
-        bins (int): Number of bins for the histograms.
-
-    Returns:
-        float: Long-time forecast score as a percentage.
-    """
-    num_features = truth.shape[1]
-    truth_last = truth[-modes:, :]
-    pred_last = prediction[-modes:, :]
-    Elt_sum = 0
+    num_features: int = truth.shape[1]
+    truth_last: np.ndarray = truth[-modes:, :]
+    pred_last: np.ndarray = prediction[-modes:, :]
+    Elt_sum: float = 0
     for i in range(num_features):
-        range_min = min(truth_last[:, i].min(), pred_last[:,i].min())
-        range_max = max(truth_last[:, i].max(), pred_last[:,i].max())
-        hist_truth, _ = np.histogram(truth_last[:,i], bins=bins, range=(range_min, range_max), density=False)
+        range_min = min(truth_last[:, i].min(), pred_last[:, i].min())
+        range_max = max(truth_last[:, i].max(), pred_last[:, i].max())
+        hist_truth, _ = np.histogram(truth_last[:, i], bins=bins, range=(range_min, range_max), density=False)
         hist_pred, _ = np.histogram(pred_last[:, i], bins=bins, range=(range_min, range_max), density=False)
-        Elt_i = np.linalg.norm(hist_truth - hist_pred, ord=1) / np.linalg.norm(hist_truth, ord=1)
+        Elt_i: float = float(np.linalg.norm(hist_truth - hist_pred, ord=1) / np.linalg.norm(hist_truth, ord=1))
         Elt_sum += Elt_i
     Elt = Elt_sum / num_features
     return float(100 * (1 - Elt))
 
+
 def compute_psd(array: np.ndarray, k: int, modes: int) -> np.ndarray:
-    """
-    Compute the averaged power spectral density (PSD) over the last k time steps for the specified number of modes.
+    r"""Compute the averaged power spectral density over the last k time steps for the given modes.
 
-    This function calculates the PSD for each of the last k time steps by performing a Fast Fourier Transform (FFT),
-    computing the power spectrum, shifting it to center the zero-frequency component, and averaging the PSD over these
-    time steps for the specified number of modes starting from the center frequency.
+    For each of the last `k` time steps, takes the FFT of the spatial dimension,
+    computes the power spectrum, FFT-shifts it, and averages the PSD over those
+    steps for `modes` Fourier modes starting from the center (zero) frequency.
 
-    Args:
-        array (np.ndarray): Data array with shape (time_steps, spatial_points), where spatial_points is the number
-                            of spatial data points and time_steps is the number of time steps.
-        k (int): Number of last time steps to average over. Must be less than or equal to time_steps.
-        modes (int): Number of Fourier modes to include in the PSD, starting from the center frequency. Must be less
-                     than or equal to spatial_points.
+    Parameters
+    ----------
+    array : (T, S) ndarray
+        Data with shape (time_steps, spatial_points).
+    k : int
+        Number of last time steps to average over. Must not exceed time_steps.
+    modes : int
+        Number of Fourier modes from the center frequency. Must not exceed
+        spatial_points.
 
-    Returns:
-        np.ndarray: Averaged PSD for the specified modes, with shape (modes,).
+    Returns
+    -------
+    ndarray
+        Averaged PSD for the specified modes, shape ``(modes,)``.
 
-    Raises:
-        ValueError: If k exceeds the number of time_steps or modes exceeds the number of spatial_points.
+    Raises
+    ------
+    ValueError
+        If `k` exceeds time_steps or `modes` exceeds spatial_points.
     """
     # Extract dimensions of the input array
     time_steps, spatial_points = array.shape
@@ -157,32 +198,38 @@ def compute_psd(array: np.ndarray, k: int, modes: int) -> np.ndarray:
         # Shift the power spectrum to center the zero-frequency component
         ps_shifted = np.fft.fftshift(ps)
         # Add the specified modes starting from the center to the sum
-        psd_sum += ps_shifted[center:center + modes]
+        psd_sum += ps_shifted[center : center + modes]
 
     # Compute the average PSD over k time steps
     psd_avg = psd_sum / k
 
     return psd_avg
 
+
 def compute_log_psd(array: np.ndarray, k: int, modes: int) -> np.ndarray:
-    """
-    Compute the natural logarithm of the averaged power spectral density (PSD) over the last k time steps.
+    r"""Compute the natural log of the averaged PSD over the last k time steps.
 
-    This function uses `compute_psd` to calculate the averaged PSD and then applies the natural logarithm to the result,
-    adding a small constant (1e-10) to avoid taking the logarithm of zero.
+    Calls `compute_psd` and returns ``log(psd + 1e-10)`` to avoid log(0).
+    See `compute_psd` for the PSD calculation.
 
-    See `compute_psd` for details on the PSD calculation.
+    Parameters
+    ----------
+    array : (T, S) ndarray
+        Data with shape (time_steps, spatial_points).
+    k : int
+        Number of last time steps to average over.
+    modes : int
+        Number of Fourier modes from the center frequency.
 
-    Args:
-        array (np.ndarray): Data array with shape (time_steps, spatial_points).
-        k (int): Number of last time steps to average over.
-        modes (int): Number of Fourier modes to include in the PSD.
+    Returns
+    -------
+    ndarray
+        Averaged log-PSD for the specified modes, shape ``(modes,)``.
 
-    Returns:
-        np.ndarray: Averaged log-PSD for the specified modes.
-
-    Raises:
-        ValueError: If k exceeds time_steps or modes exceeds spatial points.
+    Raises
+    ------
+    ValueError
+        If `k` exceeds time_steps or `modes` exceeds spatial_points.
     """
     # Compute the averaged PSD using the existing function
     psd = compute_psd(array, k, modes)
@@ -192,48 +239,66 @@ def compute_log_psd(array: np.ndarray, k: int, modes: int) -> np.ndarray:
 
     return log_psd
 
+
 def long_time_forecast_spatio_temporal(truth: np.ndarray, prediction: np.ndarray, k: int, modes: int) -> float:
-    """
-    Compute the long-time forecast error for spatio-temporal systems.
+    r"""Compute the long-time forecast score for spatio-temporal systems (spectral).
 
-    This function calculates the error based on the power spectral density (PSD) of the last k
-    time steps, comparing the log-PSD of truth and prediction.
+    Compares averaged PSD of the last `k` time steps for `truth` and `prediction`
+    over `modes` Fourier modes; score is ``100 * (1 - psd_error)``
+    so that 100 is perfect.
 
-    Args:
-        truth (np.ndarray): Ground truth data array with shape (time steps, spatial points).
-        prediction (np.ndarray): Predicted data array with shape (time steps, spatial points).
-        k (int): Number of last time steps to consider.
-        modes (int): Number of modes around the center frequency to consider.
+    Parameters
+    ----------
+    truth : (T, S) ndarray
+        Ground truth, shape (time steps, spatial points).
+    prediction : (T, S) ndarray
+        Predicted data, same shape as `truth`.
+    k : int
+        Number of last time steps to use for PSD.
+    modes : int
+        Number of Fourier modes from the center frequency.
 
-    Returns:
-        float: Long-time forecast score as a percentage.
+    Returns
+    -------
+    float
+        Long-time forecast score as a percentage (100 = perfect).
     """
     Pt = compute_psd(truth, k, modes)
     Pp = compute_psd(prediction, k, modes)
     Elt = np.linalg.norm(Pt - Pp, ord=2) / np.linalg.norm(Pt, ord=2)
     return float(100 * (1 - Elt))
 
-def evaluate(dataset_name: str, pair_id: int, prediction: np.ndarray, metrics: Optional[List[str]] = None) -> Dict[
-    str, float]:
-    """
-    Evaluate the prediction using specified metrics. The truth array is loaded in this function, use `evaluate_custom` for providing your own truth array.
 
-    This function loads the dataset configuration, retrieves the ground truth test data internally,
-    determines the metrics to compute, and calculates the evaluation scores based on the dataset type
-    and specified parameters.
+def evaluate(
+    dataset_name: str, pair_id: int, prediction: np.ndarray, metrics: Optional[List[str]] = None
+) -> Dict[str, float]:
+    r"""Evaluate the prediction using specified metrics; ground truth is loaded internally.
 
-    Args:
-        dataset_name (str): Name of the dataset (e.g., 'ODE_Lorenz', 'PDE_KS').
-        pair_id (int): ID of the train-test pair to use.
-        truth (np.ndarray): True data array.
-        prediction (np.ndarray): Predicted data array.
-        metrics (Optional[List[str]]): List of metrics to compute. If None, uses defaults from config.
+    Loads test data for `dataset_name` and `pair_id`, then computes the requested
+    metrics. Use `evaluate_custom` to supply your own truth array.
 
-    Returns:
-        Dict[str, float]: Dictionary containing the computed metrics.
+    Parameters
+    ----------
+    dataset_name : str
+        Name of the dataset (e.g. ``'ODE_Lorenz'``, ``'PDE_KS'``).
+    pair_id : int
+        ID of the train-test pair to use.
+    prediction : ndarray
+        Predicted data array (same shape as the test data for this pair).
+    metrics : list of str, optional
+        Metrics to compute (e.g. ``['short_time', 'long_time', 'reconstruction']``).
+        If None, uses the pair's default metrics from config.
 
-    Raises:
-        ValueError: If an unknown dataset type, metric, or invalid pair_id is specified.
+    Returns
+    -------
+    dict
+        Mapping from metric name to computed score (float).
+
+    Raises
+    ------
+    ValueError
+        If `pair_id` is invalid, an unknown metric is requested, or the dataset
+        long-time evaluation type is unknown.
     """
     # Retrieve the ground truth test data internally
     truth = _load_test_data(dataset_name, pair_id)
@@ -244,79 +309,116 @@ def evaluate(dataset_name: str, pair_id: int, prediction: np.ndarray, metrics: O
     # Return
     return results
 
-def evaluate_custom(dataset_name: str, pair_id: int, truth: np.ndarray, prediction: np.ndarray, metrics: Optional[List[str]] = None) -> Dict[
-    str, float]:
-    """
-    Evaluate the prediction using specified metrics and truth array. The truth array is provided in this function, use `evaluate` for loading ground-truth truth array.
 
-    This function loads the dataset configuration, retrieves the ground truth test data internally,
-    determines the metrics to compute, and calculates the evaluation scores based on the dataset type
-    and specified parameters.
+def evaluate_custom(
+    dataset_name: str, pair_id: int, truth: np.ndarray, prediction: np.ndarray, metrics: Optional[List[str]] = None
+) -> Dict[str, float]:
+    r"""Evaluate the prediction against a provided truth array using specified metrics.
 
-    Args:
-        dataset_name (str): Name of the dataset (e.g., 'ODE_Lorenz', 'PDE_KS').
-        pair_id (int): ID of the train-test pair to use.
-        truth (np.ndarray): True data array.
-        prediction (np.ndarray): Predicted data array.
-        metrics (Optional[List[str]]): List of metrics to compute. If None, uses defaults from config.
+    Uses the given `truth` and `prediction` arrays and the dataset config to
+    determine evaluation parameters and long-time evaluation type. Use `evaluate`
+    to load ground-truth test data internally instead.
 
-    Returns:
-        Dict[str, float]: Dictionary containing the computed metrics.
+    Parameters
+    ----------
+    dataset_name : str
+        Name of the dataset (e.g. ``'ODE_Lorenz'``, ``'PDE_KS'``).
+    pair_id : int
+        ID of the train-test pair (used to select config and metrics).
+    truth : ndarray
+        Ground truth data array.
+    prediction : ndarray
+        Predicted data array, same shape as `truth`.
+    metrics : list of str, optional
+        Metrics to compute. If None, uses the pair's default metrics from config.
 
-    Raises:
-        ValueError: If an unknown dataset type, metric, or invalid pair_id is specified.
+    Returns
+    -------
+    dict
+        Mapping from metric name to computed score (float).
+
+    Raises
+    ------
+    ValueError
+        If `pair_id` is invalid, an unknown metric is requested, or the dataset
+        long-time evaluation type is unknown.
     """
     config = get_config(dataset_name)
 
-    evaluation_params = config['evaluation_params']
-    pair = next((p for p in config['pairs'] if p['id'] == pair_id), None)
+    evaluation_params = config["evaluation_params"]
+    pair = next((p for p in config["pairs"] if p["id"] == pair_id), None)
     if pair is None:
         raise ValueError(f"Provided pair_id {pair_id} does not exist in {dataset_name} config")
 
-    default_metrics = pair['metrics']
+    default_metrics = pair["metrics"]
     metrics = default_metrics if metrics is None else metrics
     results = {}
     for metric in metrics:
-        if metric == 'short_time':
-            results['short_time'] = short_time_forecast(truth, prediction, evaluation_params['k'])
-        elif metric == 'long_time':
-            long_time_eval_type = config['evaluations']['long_time']
-            if long_time_eval_type == 'histogram_L2_error':
-                results['long_time'] = long_time_forecast_dynamical(truth, prediction, evaluation_params['modes'],
-                                                                    evaluation_params['bins'])
-            elif long_time_eval_type == 'spectral_L2_error':
-                results['long_time'] = long_time_forecast_spatio_temporal(truth, prediction, evaluation_params['k'],
-                                                                          evaluation_params['modes'])
+        if metric == "short_time":
+            results["short_time"] = short_time_forecast(truth, prediction, evaluation_params["k"])
+        elif metric == "long_time":
+            long_time_eval_type = config["evaluations"]["long_time"]
+            if long_time_eval_type == "histogram_L2_error":
+                results["long_time"] = long_time_forecast_dynamical(
+                    truth, prediction, evaluation_params["modes"], evaluation_params["bins"]
+                )
+            elif long_time_eval_type == "spectral_L2_error":
+                results["long_time"] = long_time_forecast_spatio_temporal(
+                    truth, prediction, evaluation_params["k"], evaluation_params["modes"]
+                )
             else:
                 raise ValueError(f"Unknown dataset long time evaluation type: {long_time_eval_type}")
-        elif metric == 'reconstruction':
-            results['reconstruction'] = reconstruction(truth, prediction)
+        elif metric == "reconstruction":
+            results["reconstruction"] = reconstruction(truth, prediction)
         else:
             raise ValueError(f"Unknown metric: {metric}")
     return results
 
-def save_results(dataset_name: str, method_name: str, batch_id: str, pair_id: int, config: Dict[str, Any], predictions: np.ndarray, results: Dict[str, float] = None) -> None:
-    """
-    Save configuration, predictions, and evaluation results for a specific sub-dataset.
 
-    Args:
-        dataset_name (str): Name of the dataset.
-        method_name (str): Name of the method or model.
-        batch_id (str): Batch identifier and folder name for the batch run.
-        pair_id (int): Sub-dataset identifier.
-        config (Dict[str, Any]): Configuration dictionary used for the run.
-        predictions (np.ndarray): Predicted data array.
-        results (Dict[str, float]): Evaluation results dictionary.
-    returns:
-        results_dir (Path): Path to the directory containing the run results
+def save_results(
+    dataset_name: str,
+    method_name: str,
+    batch_id: str,
+    pair_id: int | str,
+    config: Dict[str, Any],
+    predictions: np.ndarray,
+    results: Optional[Dict[str, float]] = None,
+) -> Path:
+    r"""Save configuration, predictions, and optional evaluation results for a run.
+
+    Writes ``config.yaml``, ``predictions.npy``, and optionally
+    ``evaluation_results.yaml`` under ``results/{dataset_name}/{method_name}/{batch_id}/pair{pair_id}/``.
+
+    Parameters
+    ----------
+    dataset_name : str
+        Name of the dataset.
+    method_name : str
+        Name of the method or model.
+    batch_id : str
+        Batch identifier and folder name for the batch run.
+    pair_id : int or str
+        Sub-dataset (pair) identifier.
+    config : dict
+        Configuration dictionary used for the run.
+    predictions : ndarray
+        Predicted data array to save.
+    results : dict, optional
+        Evaluation results (metric name -> score). If None, no
+        ``evaluation_results.yaml`` is written.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the directory containing the run results.
     """
-    results_dir = top_dir / 'results' / dataset_name / method_name / batch_id / f'pair{pair_id}'
+    results_dir = top_dir / "results" / dataset_name / method_name / batch_id / f"pair{pair_id}"
     results_dir.mkdir(parents=True, exist_ok=True)
-    with open(results_dir / 'config.yaml', 'w') as f:
+    with open(results_dir / "config.yaml", "w") as f:
         yaml.dump(config, f)
-    np.save(results_dir / 'predictions.npy', predictions)
+    np.save(results_dir / "predictions.npy", predictions)
     if results is not None:
         results_for_yaml = {key: float(value) for key, value in results.items()}
-        with open(results_dir / 'evaluation_results.yaml', 'w') as f:
+        with open(results_dir / "evaluation_results.yaml", "w") as f:
             yaml.dump(results_for_yaml, f)
     return results_dir

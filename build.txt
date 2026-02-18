@@ -1,0 +1,182 @@
+nox > Running session build_docs
+nox > rm -rf docs/build
+nox > rm -rf docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/contributing.rst
+[autosummary] generating autosummary for: docs/source/contributing.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/developer_instructions.rst
+[autosummary] generating autosummary for: docs/source/developer_instructions.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/api.rst
+[autosummary] generating autosummary for: docs/source/api.rst
+[autosummary] writing to docs/source/generated
+[autosummary] generating autosummary for: docs/source/generated/ctf4science.rst
+[autosummary] writing to docs/source/generated
+[autosummary] generating autosummary for: docs/source/generated/ctf4science.benchmark_module.rst, docs/source/generated/ctf4science.data_module.rst, docs/source/generated/ctf4science.eval_module.rst, docs/source/generated/ctf4science.performance_module.rst, docs/source/generated/ctf4science.tune_module.rst, docs/source/generated/ctf4science.visualization_module.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/evaluation_module.rst
+[autosummary] generating autosummary for: docs/source/evaluation_module.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/datasets.rst
+[autosummary] generating autosummary for: docs/source/datasets.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/user_guide.rst
+[autosummary] generating autosummary for: docs/source/user_guide.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/configuration.rst
+[autosummary] generating autosummary for: docs/source/configuration.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/visualization.rst
+[autosummary] generating autosummary for: docs/source/visualization.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/index.rst
+[autosummary] generating autosummary for: docs/source/index.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/getting_started.rst
+[autosummary] generating autosummary for: docs/source/getting_started.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/hyperparameter_optimization.rst
+[autosummary] generating autosummary for: docs/source/hyperparameter_optimization.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/benchmark_module.rst
+[autosummary] generating autosummary for: docs/source/benchmark_module.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-autogen -o docs/source/generated docs/source/evaluation.rst
+[autosummary] generating autosummary for: docs/source/evaluation.rst
+[autosummary] writing to docs/source/generated
+nox > sphinx-build -M html docs/source docs/build --fail-on-warning
+Running Sphinx v9.1.0
+loading translations [en]... done
+making output directory... done
+[autosummary] generating autosummary for: api.rst, benchmark_module.rst, configuration.rst, contributing.rst, datasets.rst, developer_instructions.rst, evaluation.rst, evaluation_module.rst, generated/ctf4science.benchmark_module.rst, generated/ctf4science.data_module.rst, generated/ctf4science.eval_module.rst, generated/ctf4science.performance_module.rst, generated/ctf4science.rst, generated/ctf4science.tune_module.rst, generated/ctf4science.visualization_module.rst, getting_started.rst, hyperparameter_optimization.rst, index.rst, user_guide.rst, visualization.rst
+[autosummary] generating autosummary for: /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.benchmark_module.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.data_module.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.eval_module.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.performance_module.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.tune_module.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.visualization_module.rst
+[autosummary] generating autosummary for: /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.benchmark_module.ModelBenchmarker.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.benchmark_module.main.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.benchmark_module.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.data_module.get_applicable_plots.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.data_module.get_config.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.data_module.get_metadata.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.data_module.get_prediction_timesteps.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.data_module.get_training_timesteps.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.data_module.get_validation_prediction_timesteps.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.data_module.get_validation_training_timesteps.rst, ..., /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.eval_module.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.eval_module.save_results.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.eval_module.short_time_forecast.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.performance_module.PerformanceMonitor.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.performance_module.measure_time.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.performance_module.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.tune_module.ModelTuner.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.tune_module.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.visualization_module.Visualization.rst, /home/alexey/Git/ctf4science/docs/source/generated/ctf4science.visualization_module.rst
+building [mo]: targets for 0 po files that are out of date
+writing output... 
+building [html]: targets for 20 source files that are out of date
+updating environment: [new config] 46 added, 0 changed, 0 removed
+reading sources... [  2%] api
+reading sources... [  4%] benchmark_module
+reading sources... [  7%] configuration
+reading sources... [  9%] contributing
+reading sources... [ 11%] datasets
+reading sources... [ 13%] developer_instructions
+reading sources... [ 15%] evaluation
+reading sources... [ 17%] evaluation_module
+reading sources... [ 20%] generated/ctf4science
+reading sources... [ 22%] generated/ctf4science.benchmark_module
+reading sources... [ 24%] generated/ctf4science.benchmark_module.ModelBenchmarker
+reading sources... [ 26%] generated/ctf4science.benchmark_module.main
+reading sources... [ 28%] generated/ctf4science.data_module
+reading sources... [ 30%] generated/ctf4science.data_module.get_applicable_plots
+reading sources... [ 33%] generated/ctf4science.data_module.get_config
+reading sources... [ 35%] generated/ctf4science.data_module.get_metadata
+reading sources... [ 37%] generated/ctf4science.data_module.get_prediction_timesteps
+reading sources... [ 39%] generated/ctf4science.data_module.get_training_timesteps
+reading sources... [ 41%] generated/ctf4science.data_module.get_validation_prediction_timesteps
+reading sources... [ 43%] generated/ctf4science.data_module.get_validation_training_timesteps
+reading sources... [ 46%] generated/ctf4science.data_module.load_dataset
+reading sources... [ 48%] generated/ctf4science.data_module.load_validation_dataset
+reading sources... [ 50%] generated/ctf4science.data_module.parse_pair_ids
+reading sources... [ 52%] generated/ctf4science.eval_module
+reading sources... [ 54%] generated/ctf4science.eval_module.compute_log_psd
+reading sources... [ 57%] generated/ctf4science.eval_module.compute_psd
+reading sources... [ 59%] generated/ctf4science.eval_module.evaluate
+reading sources... [ 61%] generated/ctf4science.eval_module.evaluate_custom
+reading sources... [ 63%] generated/ctf4science.eval_module.extract_metrics_in_order
+reading sources... [ 65%] generated/ctf4science.eval_module.long_time_forecast_dynamical
+reading sources... [ 67%] generated/ctf4science.eval_module.long_time_forecast_spatio_temporal
+reading sources... [ 70%] generated/ctf4science.eval_module.reconstruction
+reading sources... [ 72%] generated/ctf4science.eval_module.save_results
+reading sources... [ 74%] generated/ctf4science.eval_module.short_time_forecast
+reading sources... [ 76%] generated/ctf4science.performance_module
+reading sources... [ 78%] generated/ctf4science.performance_module.PerformanceMonitor
+reading sources... [ 80%] generated/ctf4science.performance_module.measure_time
+reading sources... [ 83%] generated/ctf4science.tune_module
+reading sources... [ 85%] generated/ctf4science.tune_module.ModelTuner
+reading sources... [ 87%] generated/ctf4science.visualization_module
+reading sources... [ 89%] generated/ctf4science.visualization_module.Visualization
+reading sources... [ 91%] getting_started
+reading sources... [ 93%] hyperparameter_optimization
+reading sources... [ 96%] index
+reading sources... [ 98%] user_guide
+reading sources... [100%] visualization
+
+/home/alexey/Git/ctf4science/docs/source/getting_started.rst:2: WARNING: Title underline too short.
+
+Getting Started with CTF for Science Framework
+============================================= [docutils]
+/home/alexey/Git/ctf4science/docs/source/getting_started.rst:76: ERROR: Unexpected indentation. [docutils]
+/home/alexey/Git/ctf4science/docs/source/getting_started.rst:82: ERROR: Unexpected indentation. [docutils]
+/home/alexey/Git/ctf4science/docs/source/getting_started.rst:100: ERROR: Unexpected indentation. [docutils]
+/home/alexey/Git/ctf4science/docs/source/getting_started.rst:270: WARNING: Title underline too short.
+
+Step 6: Test Your Model
+~~~~~~~~~~~~~~~~~~~~~~ [docutils]
+looking for now-outdated files... none found
+pickling environment... done
+checking consistency... done
+preparing documents... done
+copying assets... 
+copying static files... 
+Writing evaluated template result to /home/alexey/Git/ctf4science/docs/build/html/_static/documentation_options.js
+Writing evaluated template result to /home/alexey/Git/ctf4science/docs/build/html/_static/language_data.js
+Writing evaluated template result to /home/alexey/Git/ctf4science/docs/build/html/_static/basic.css
+copying static files: done
+copying extra files... 
+copying extra files: done
+copying assets: done
+writing output... [  2%] api
+writing output... [  4%] benchmark_module
+writing output... [  7%] configuration
+writing output... [  9%] contributing
+writing output... [ 11%] datasets
+writing output... [ 13%] developer_instructions
+writing output... [ 15%] evaluation
+writing output... [ 17%] evaluation_module
+writing output... [ 20%] generated/ctf4science
+writing output... [ 22%] generated/ctf4science.benchmark_module
+writing output... [ 24%] generated/ctf4science.benchmark_module.ModelBenchmarker
+writing output... [ 26%] generated/ctf4science.benchmark_module.main
+writing output... [ 28%] generated/ctf4science.data_module
+writing output... [ 30%] generated/ctf4science.data_module.get_applicable_plots
+writing output... [ 33%] generated/ctf4science.data_module.get_config
+writing output... [ 35%] generated/ctf4science.data_module.get_metadata
+writing output... [ 37%] generated/ctf4science.data_module.get_prediction_timesteps
+writing output... [ 39%] generated/ctf4science.data_module.get_training_timesteps
+writing output... [ 41%] generated/ctf4science.data_module.get_validation_prediction_timesteps
+writing output... [ 43%] generated/ctf4science.data_module.get_validation_training_timesteps
+writing output... [ 46%] generated/ctf4science.data_module.load_dataset
+writing output... [ 48%] generated/ctf4science.data_module.load_validation_dataset
+writing output... [ 50%] generated/ctf4science.data_module.parse_pair_ids
+writing output... [ 52%] generated/ctf4science.eval_module
+writing output... [ 54%] generated/ctf4science.eval_module.compute_log_psd
+writing output... [ 57%] generated/ctf4science.eval_module.compute_psd
+writing output... [ 59%] generated/ctf4science.eval_module.evaluate
+writing output... [ 61%] generated/ctf4science.eval_module.evaluate_custom
+writing output... [ 63%] generated/ctf4science.eval_module.extract_metrics_in_order
+writing output... [ 65%] generated/ctf4science.eval_module.long_time_forecast_dynamical
+writing output... [ 67%] generated/ctf4science.eval_module.long_time_forecast_spatio_temporal
+writing output... [ 70%] generated/ctf4science.eval_module.reconstruction
+writing output... [ 72%] generated/ctf4science.eval_module.save_results
+writing output... [ 74%] generated/ctf4science.eval_module.short_time_forecast
+writing output... [ 76%] generated/ctf4science.performance_module
+writing output... [ 78%] generated/ctf4science.performance_module.PerformanceMonitor
+writing output... [ 80%] generated/ctf4science.performance_module.measure_time
+writing output... [ 83%] generated/ctf4science.tune_module
+writing output... [ 85%] generated/ctf4science.tune_module.ModelTuner
+writing output... [ 87%] generated/ctf4science.visualization_module
+writing output... [ 89%] generated/ctf4science.visualization_module.Visualization
+writing output... [ 91%] getting_started
+writing output... [ 93%] hyperparameter_optimization
+writing output... [ 96%] index
+writing output... [ 98%] user_guide
+writing output... [100%] visualization
+
+generating indices... genindex py-modindex done
+writing additional pages... search done
+dumping search index in English (code: en)... done
+dumping object inventory... done
+build finished with problems, 5 warnings (with warnings treated as errors).
+nox > Command sphinx-build -M html docs/source docs/build --fail-on-warning failed with exit code 1
+nox > Session build_docs failed.
