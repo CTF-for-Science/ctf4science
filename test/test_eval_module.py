@@ -545,8 +545,8 @@ class TestDataModule(unittest.TestCase):
             finally:
                 Path(csv_path).unlink(missing_ok=True)
 
-    def test_evaluate_kaggle_csv_valid_success(self):
-        """evaluate_kaggle_csv runs successfully on a valid CSV and returns E1–E12 and average."""
+    def test_evaluate_kaggle_csv_valid_success_100(self):
+        """evaluate_kaggle_csv runs successfully on a valid CSV and returns E1–E12 and average. Scores 100."""
         from ctf4science.data_module import _load_test_data
 
         rows = {}
@@ -563,5 +563,26 @@ class TestDataModule(unittest.TestCase):
             self.assertIsInstance(results["average"], (int, float))
             self.assertAlmostEqual(results["average"], sum(results[f"E{i}"] for i in range(1, 13)) / 12)
             self.assertAlmostEqual(results["average"], 100.0)
+        finally:
+            Path(csv_path).unlink(missing_ok=True)
+
+    def test_evaluate_kaggle_csv_valid_success_0(self):
+        """evaluate_kaggle_csv runs successfully on a valid CSV and returns E1–E12 and average. Doesn't score 100."""
+        from ctf4science.data_module import _load_test_data
+
+        rows = {}
+        for pid in range(1, 10):
+            rows[pid] = _load_test_data("Lorenz_Official", pid) * 0.0
+        csv_path = self._lorenz_csv_path(rows)
+        try:
+            results = evaluate_kaggle_csv(csv_path, dataset_name="Lorenz_Official")
+            self.assertIsInstance(results, dict)
+            for i in range(1, 13):
+                self.assertIn(f"E{i}", results)
+                self.assertIsInstance(results[f"E{i}"], (int, float))
+            self.assertIn("average", results)
+            self.assertIsInstance(results["average"], (int, float))
+            self.assertAlmostEqual(results["average"], sum(results[f"E{i}"] for i in range(1, 13)) / 12)
+            self.assertLess(results["average"], 100.0)
         finally:
             Path(csv_path).unlink(missing_ok=True)
