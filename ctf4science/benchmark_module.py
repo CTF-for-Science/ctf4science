@@ -4,15 +4,16 @@ Benchmark Module for CTF models, benchmarks a model with optimal hyperparameters
 This module provides a systematic evaluation of CTF models against a hidden test set. It also assesses model stability by running models multiple times with different random seeds.
 """
 
-import sys
-import yaml
 import argparse
-import time
 import json
-import numpy as np
-from pathlib import Path
-from typing import Dict, Any, List
+import sys
+import time
 from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import yaml
 
 from ctf4science.performance_module import PerformanceMonitor, measure_time
 
@@ -194,7 +195,7 @@ class ModelBenchmarker:
 
         return config_path
 
-    def _run_single_evaluation(self, run_idx: int, seed: int) -> Dict[str, Any]:
+    def _run_single_evaluation(self, run_idx: int, seed: int) -> dict[str, Any]:
         """Run a single evaluation of the model."""
         print(f"  Run {run_idx + 1}/{self.num_runs} (seed: {seed})")
 
@@ -217,7 +218,7 @@ class ModelBenchmarker:
                     raise AttributeError("run.py does not have a main function")
 
             # Measure execution time
-            result, duration = measure_time(run_model)
+            _result, duration = measure_time(run_model)
 
             # Find and load results for this specific run
             results_data = self._find_and_load_results_for_run(run_idx)
@@ -239,7 +240,7 @@ class ModelBenchmarker:
             if config_path.exists():
                 config_path.unlink()
 
-    def _find_and_load_results_for_run(self, run_idx: int) -> Dict[str, Any]:
+    def _find_and_load_results_for_run(self, run_idx: int) -> dict[str, Any]:
         """Find and load the results from the most recent run (for this pair_id)."""
         # Look for results in the standard location
         results_base = top_dir / "results" / self.dataset_name / self.model_name
@@ -271,7 +272,7 @@ class ModelBenchmarker:
 
         return results
 
-    def run_benchmark(self) -> Dict[str, Any]:
+    def run_benchmark(self) -> dict[str, Any]:
         """Run multiple benchmarking evaluations and save results."""
         print(f"\n=== Starting benchmark for {self.model_name} ===")
 
@@ -356,7 +357,7 @@ class ModelBenchmarker:
 
         return benchmark_results
 
-    def _extract_run_results(self, all_runs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _extract_run_results(self, all_runs: list[dict[str, Any]]) -> dict[str, Any]:
         """Extract run results for each successful run, keyed by run identifier."""
         successful_runs = [run for run in all_runs if run.get("success", False) and "results" in run]
 
@@ -368,7 +369,7 @@ class ModelBenchmarker:
             for run in successful_runs
         }
 
-    def _calculate_statistics(self, all_runs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _calculate_statistics(self, all_runs: list[dict[str, Any]]) -> dict[str, Any]:
         """Calculate mean and standard deviation for all metrics; requires 3+ successful runs."""
         successful_runs = [run for run in all_runs if run.get("success", False) and "results" in run]
 

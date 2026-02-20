@@ -4,17 +4,36 @@ Evaluation Module for CTF models, provides evaluation metrics and routines for C
 This module handles evaluation of CTF models against a hidden test set. It also assesses model stability by running models multiple times with different random seeds.
 """
 
-import yaml
-import numpy as np
 from pathlib import Path
-from ctf4science.data_module import get_config, _load_test_data
-from typing import Dict, Any, Optional, List
+from typing import Any
+
+import numpy as np
+import pandas as pd
+import yaml
+
+from ctf4science.data_module import _load_test_data, get_config
 
 file_dir = Path(__file__).parent
 top_dir = Path(__file__).parent.parent
 
+# Map (pair_id, metric_name) to E1–E12 index
+pair_id_to_e = {
+    (1, "short_time"): 1,
+    (1, "long_time"): 2,
+    (2, "reconstruction"): 3,
+    (3, "long_time"): 4,
+    (4, "reconstruction"): 5,
+    (5, "long_time"): 6,
+    (6, "short_time"): 7,
+    (6, "long_time"): 8,
+    (7, "short_time"): 9,
+    (7, "long_time"): 10,
+    (8, "short_time"): 11,
+    (9, "short_time"): 12,
+}
 
-def extract_metrics_in_order(dataset_name: str, batch_results: Dict[str, Any]) -> List[float]:
+
+def extract_metrics_in_order(dataset_name: str, batch_results: dict[str, Any]) -> list[float]:
     r"""Extract metric values from batch results in the order defined by the dataset config.
 
     Pairs are processed in ascending ``pair_id``; within each pair, metrics
@@ -270,8 +289,8 @@ def long_time_forecast_spatio_temporal(truth: np.ndarray, prediction: np.ndarray
 
 
 def evaluate(
-    dataset_name: str, pair_id: int, prediction: np.ndarray, metrics: Optional[List[str]] = None
-) -> Dict[str, float]:
+    dataset_name: str, pair_id: int, prediction: np.ndarray, metrics: list[str] | None = None
+) -> dict[str, float]:
     r"""Evaluate the prediction using specified metrics; ground truth is loaded internally.
 
     Loads test data for `dataset_name` and `pair_id`, then computes the requested
@@ -311,8 +330,8 @@ def evaluate(
 
 
 def evaluate_custom(
-    dataset_name: str, pair_id: int, truth: np.ndarray, prediction: np.ndarray, metrics: Optional[List[str]] = None
-) -> Dict[str, float]:
+    dataset_name: str, pair_id: int, truth: np.ndarray, prediction: np.ndarray, metrics: list[str] | None = None
+) -> dict[str, float]:
     r"""Evaluate the prediction against a provided truth array using specified metrics.
 
     Uses the given `truth` and `prediction` arrays and the dataset config to
@@ -380,9 +399,9 @@ def save_results(
     method_name: str,
     batch_id: str,
     pair_id: int | str,
-    config: Dict[str, Any],
+    config: dict[str, Any],
     predictions: np.ndarray,
-    results: Optional[Dict[str, float]] = None,
+    results: dict[str, float] | None = None,
 ) -> Path:
     r"""Save configuration, predictions, and optional evaluation results for a run.
 
@@ -422,3 +441,101 @@ def save_results(
         with open(results_dir / "evaluation_results.yaml", "w") as f:
             yaml.dump(results_for_yaml, f)
     return results_dir
+
+
+def evaluate_kaggle_csv(csv_path: str, dataset_name: str) -> dict[str, float]:
+    r"""Evaluate the predictions from a Kaggle CSV file.
+
+    Loads the CSV, groups rows by pair_id, converts each group to a (T, 3)
+    prediction matrix, and runs the standard CTF evaluation for each pair.
+    Returns per-pair metrics, E1–E12 in order, and their average (score).
+
+    Parameters
+    ----------
+    csv_path : str
+        Path to the Kaggle CSV file.
+    dataset_name : str
+        Dataset name used for config and ground-truth loading.
+
+    Returns
+    -------
+    dict
+        Computed metrics: keys ``pair_{id}_{metric}`` for each pair and metric,
+        ``E1``–``E12`` for the ordered metric list, and ``average`` for the
+        mean of E1–E12.
+
+    Notes
+    -----
+    CSVs have the following format:
+
+    pair_id,timestep,x,y,z
+    1,0,value,value,value
+    1,1,value,value,value
+    1,2,value,value,value
+    ...
+    1,999,value,value,value
+    2,0,value,value,value
+    2,1,value,value,value
+    ...
+    9,999,value,value,value
+    """
+    # Load CSV and check required columns
+    required = ["pair_id", "timestep", "x", "y", "z"]
+    df = pd.read_csv(csv_path)
+    for col in required:
+        if col not in df.columns:
+            raise ValueError(f"CSV must contain columns {required}; missing: {col}")
+
+    # Load config and get pairs and matrix shapes
+    config = get_config(dataset_name)
+    pairs = sorted(config["pairs"], key=lambda p: p["id"])
+    metadata = config.get("metadata", {})
+    matrix_shapes = metadata.get("matrix_shapes", {})
+
+    # Initialize results dictionary
+    all_pair_results: dict[int, dict[str, float]] = {}
+
+    # Loop through pairs and evaluate
+    for pair in pairs:
+        # Get pair ID and expected shape
+        pair_id = pair["id"]
+        test_key = f"X{pair_id}test.mat"
+        expected_shape = matrix_shapes.get(test_key)
+        if expected_shape is None:
+            raise ValueError(f"Expected shape not found for pair_id={pair_id} in {csv_path}")
+
+        # Get subset of dataframe for this pair and sort by timestep
+        sub_df = df.loc[df["pair_id"] == pair_id].sort_values("timestep")
+        if sub_df.empty:
+            raise ValueError(f"No rows found for pair_id={pair_id} in {csv_path}")
+
+        # Convert to numpy array and check shapes
+        pred_mat = sub_df[["x", "y", "z"]].to_numpy(dtype=np.float64)
+        pred_t, pred_f = pred_mat.shape
+        exp_t, exp_f = expected_shape
+        if pred_t != exp_t or pred_f != exp_f:
+            raise ValueError(
+                f"pair_id={pair_id}: prediction shape ({pred_t}, {pred_f}) does not match "
+                f"expected test shape {exp_t}, {exp_f}"
+            )
+
+        # Evaluate and store results
+        pair_results = evaluate(dataset_name, pair_id, pred_mat, metrics=None)
+        all_pair_results[pair_id] = pair_results
+
+    # Map (pair_id, metric_name) to E1–E12 using pair_id_to_e
+    results: dict[str, float] = {}
+    for pair_id, metrics in all_pair_results.items():
+        for metric_name, value in metrics.items():
+            key = (pair_id, metric_name)
+            if key not in pair_id_to_e:
+                raise ValueError(f"(pair_id={pair_id}, metric={metric_name}) not found in pair_id_to_e")
+            e_idx = pair_id_to_e[key]
+            results[f"E{e_idx}"] = float(value)
+
+    # Average of E1–E12
+    e_keys_sorted = [f"E{i}" for i in range(1, 13)]
+    metric_values = [results[k] for k in e_keys_sorted]
+    results["average"] = float(np.mean(metric_values))
+
+    return results

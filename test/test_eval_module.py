@@ -2,10 +2,12 @@ import yaml
 import tempfile
 import unittest
 import numpy as np
+import pandas as pd
 from scipy.io import savemat
 from pathlib import Path
 
 from unittest.mock import patch
+from ctf4science.data_module import _load_test_data
 from ctf4science.eval_module import (
     short_time_forecast,
     reconstruction,
@@ -17,6 +19,7 @@ from ctf4science.eval_module import (
     save_results,
     compute_psd,
     extract_metrics_in_order,
+    evaluate_kaggle_csv,
 )
 
 
@@ -131,6 +134,61 @@ class TestDataModule(unittest.TestCase):
                 yaml.dump(yaml_content, f)
             # Write .mat files
             _savemat_no_meta(cls.top_dir / "data" / f"dataset_{i}" / "test" / "X1test.mat", cls.mock_test_mat_1)
+
+        # Lorenz_Official-like dataset for evaluate_kaggle_csv tests
+        lorenz_dir = cls.top_dir / "data" / "Lorenz_Official"
+        lorenz_test_dir = lorenz_dir / "test"
+        lorenz_test_dir.mkdir(parents=True, exist_ok=True)
+        lorenz_config = {
+            "type": "dynamical",
+            "evaluation_params": {"k": 20, "modes": 500, "bins": 41},
+            "pairs": [
+                {"id": 1, "train": ["X1train.mat"], "test": "X1test.mat", "metrics": ["short_time", "long_time"]},
+                {"id": 2, "train": ["X2train.mat"], "test": "X2test.mat", "metrics": ["reconstruction"]},
+                {"id": 3, "train": ["X2train.mat"], "test": "X3test.mat", "metrics": ["long_time"]},
+                {"id": 4, "train": ["X3train.mat"], "test": "X4test.mat", "metrics": ["reconstruction"]},
+                {"id": 5, "train": ["X3train.mat"], "test": "X5test.mat", "metrics": ["long_time"]},
+                {"id": 6, "train": ["X4train.mat"], "test": "X6test.mat", "metrics": ["short_time", "long_time"]},
+                {"id": 7, "train": ["X5train.mat"], "test": "X7test.mat", "metrics": ["short_time", "long_time"]},
+                {
+                    "id": 8,
+                    "train": ["X6train.mat", "X7train.mat", "X8train.mat"],
+                    "test": "X8test.mat",
+                    "initialization": "X9train.mat",
+                    "metrics": ["short_time"],
+                },
+                {
+                    "id": 9,
+                    "train": ["X6train.mat", "X7train.mat", "X8train.mat"],
+                    "test": "X9test.mat",
+                    "initialization": "X10train.mat",
+                    "metrics": ["short_time"],
+                },
+            ],
+            "metadata": {
+                "delta_t": 0.05,
+                "spatial_dimension": 3,
+                "matrix_shapes": {
+                    "X1test.mat": [1000, 3],
+                    "X2test.mat": [10000, 3],
+                    "X3test.mat": [1000, 3],
+                    "X4test.mat": [10000, 3],
+                    "X5test.mat": [1000, 3],
+                    "X6test.mat": [1000, 3],
+                    "X7test.mat": [1000, 3],
+                    "X8test.mat": [1000, 3],
+                    "X9test.mat": [1000, 3],
+                },
+            },
+            "evaluations": {"long_time": "histogram_L2_error"},
+        }
+        with open(lorenz_dir / "Lorenz_Official.yaml", "w") as f:
+            yaml.dump(lorenz_config, f)
+        for pair_id, shape in lorenz_config["metadata"]["matrix_shapes"].items():
+            # Write .mat files for test data
+            test_t, test_f = shape
+            data = np.arange(test_t * test_f, dtype=np.float64).reshape(test_t, test_f)  # dummy test data
+            _savemat_no_meta(lorenz_test_dir / pair_id, {"data": data})
 
     @classmethod
     def tearDownClass(cls):
@@ -382,3 +440,128 @@ class TestDataModule(unittest.TestCase):
             self.assertIsNone(evaluate_custom("dataset_0", 999, None, None))  # pyrefly: ignore
         self.assertIn("Provided pair_id", str(context.exception))
         self.assertIn("does not exist in", str(context.exception))
+
+    def _lorenz_csv_path(self, rows_by_pair):
+        """Build a temporary Kaggle-style submission CSV from per-pair prediction arrays.
+
+        Each key in rows_by_pair is a pair_id (1-9); each value is an array of shape
+        (T, 3) with x, y, z coordinates. Rows are written in ascending pair_id and
+        timestep order. The file has columns: pair_id, timestep, x, y, z.
+
+        Returns
+        -------
+        str
+            Path to the temporary CSV file (caller should unlink when done).
+        """
+        records = []
+        for pair_id in sorted(rows_by_pair.keys()):
+            arr = rows_by_pair[pair_id]
+            for t in range(arr.shape[0]):
+                records.append({"pair_id": pair_id, "timestep": t, "x": arr[t, 0], "y": arr[t, 1], "z": arr[t, 2]})
+        df = pd.DataFrame(records)
+        fd = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+        fd.close()
+        df.to_csv(fd.name, index=False)
+        return fd.name
+
+    def test_evaluate_kaggle_csv_missing_column(self):
+        """evaluate_kaggle_csv raises ValueError when a required column is missing."""
+        df = pd.DataFrame({"pair_id": [1], "timestep": [0], "x": [0.0], "y": [0.0]})  # missing z
+        fd = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+        fd.close()
+        df.to_csv(fd.name, index=False)
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                evaluate_kaggle_csv(fd.name, dataset_name="Lorenz_Official")
+            self.assertIn("CSV must contain columns", str(ctx.exception))
+            self.assertIn("missing", str(ctx.exception))
+        finally:
+            Path(fd.name).unlink(missing_ok=True)
+
+    def test_evaluate_kaggle_csv_no_rows_for_pair(self):
+        """evaluate_kaggle_csv raises ValueError when CSV has no rows for a pair_id. Fails because the only pair_id with rows is 1, but there are other pairs in the config."""
+        rows = {}
+        rows[1] = _load_test_data("Lorenz_Official", 1)
+        csv_path = self._lorenz_csv_path(rows)
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                evaluate_kaggle_csv(csv_path, dataset_name="Lorenz_Official")
+            self.assertIn("No rows found for pair_id=", str(ctx.exception))
+        finally:
+            Path(csv_path).unlink(missing_ok=True)
+
+    def test_evaluate_kaggle_csv_shape_mismatch(self):
+        """evaluate_kaggle_csv raises ValueError when prediction shape does not match expected."""
+        rows = {}
+        for pid in range(1, 10):
+            arr = _load_test_data("Lorenz_Official", pid)
+            if pid == 1:
+                arr = arr[:999]  # wrong length for pair 1 (expect 1000)
+            rows[pid] = arr
+        csv_path = self._lorenz_csv_path(rows)
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                evaluate_kaggle_csv(csv_path, dataset_name="Lorenz_Official")
+            self.assertIn("prediction shape", str(ctx.exception))
+            self.assertIn("does not match", str(ctx.exception))
+        finally:
+            Path(csv_path).unlink(missing_ok=True)
+
+    def test_evaluate_kaggle_csv_expected_shape_not_found(self):
+        """evaluate_kaggle_csv raises ValueError when config has no matrix_shapes for a pair."""
+        df = pd.DataFrame(
+            {
+                "pair_id": [1] * 20,
+                "timestep": list(range(20)),
+                "x": [0.0] * 20,
+                "y": [0.0] * 20,
+                "z": [0.0] * 20,
+            }
+        )
+        fd = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+        fd.close()
+        df.to_csv(fd.name, index=False)
+        try:
+            with self.assertRaises(ValueError) as ctx:
+                evaluate_kaggle_csv(fd.name, dataset_name="dataset_0")
+            self.assertIn("Expected shape not found", str(ctx.exception))
+        finally:
+            Path(fd.name).unlink(missing_ok=True)
+
+    def test_evaluate_kaggle_csv_pair_id_to_e_not_found(self):
+        """evaluate_kaggle_csv raises ValueError when a (pair_id, metric) is not in pair_id_to_e."""
+        from ctf4science.data_module import _load_test_data
+
+        rows = {}
+        for pid in range(1, 10):
+            rows[pid] = _load_test_data("Lorenz_Official", pid)
+        csv_path = self._lorenz_csv_path(rows)
+        with patch("ctf4science.eval_module.evaluate") as mock_evaluate:
+            mock_evaluate.return_value = {"unknown_metric": 1.0}
+            try:
+                with self.assertRaises(ValueError) as ctx:
+                    evaluate_kaggle_csv(csv_path, dataset_name="Lorenz_Official")
+                self.assertIn("not found in pair_id_to_e", str(ctx.exception))
+            finally:
+                Path(csv_path).unlink(missing_ok=True)
+
+    def test_evaluate_kaggle_csv_valid_success(self):
+        """evaluate_kaggle_csv runs successfully on a valid CSV and returns E1–E12 and average."""
+        from ctf4science.data_module import _load_test_data
+
+        rows = {}
+        for pid in range(1, 10):
+            rows[pid] = _load_test_data("Lorenz_Official", pid)
+        csv_path = self._lorenz_csv_path(rows)
+        try:
+            results = evaluate_kaggle_csv(csv_path, dataset_name="Lorenz_Official")
+            self.assertIsInstance(results, dict)
+            for i in range(1, 13):
+                self.assertIn(f"E{i}", results)
+                self.assertIsInstance(results[f"E{i}"], (int, float))
+            self.assertIn("average", results)
+            self.assertIsInstance(results["average"], (int, float))
+            self.assertAlmostEqual(results["average"], sum(results[f"E{i}"] for i in range(1, 13)) / 12)
+            self.assertAlmostEqual(results["average"], 100.0)
+        finally:
+            Path(csv_path).unlink(missing_ok=True)

@@ -32,9 +32,10 @@ To set up the framework on your system:
 
    - ``numpy``
    - ``scipy``
+   - ``pandas``
    - ``pyyaml``
-   - ``matplotlib``
    - ``seaborn``
+   - ``matplotlib``
    - ``importlib-resources``
 
    To install all optional dependencies, run ``pip install -e .[all]`` instead. This installs optional dependencies:

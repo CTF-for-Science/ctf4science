@@ -4,17 +4,18 @@ Data Module for CTF models, provides loading and configuration utilities for CTF
 This module handles train/test pairs, timestep generation for training and evaluation, validation splits, and dataset metadata used by models and the evaluation pipeline.
 """
 
-import yaml
-import numpy as np
 from pathlib import Path
+from typing import Any
+
+import numpy as np
+import yaml
 from scipy.io import loadmat
-from typing import Dict, Any, List, Tuple, Optional
 
 file_dir = Path(__file__).parent
 top_dir = Path(__file__).parent.parent
 
 
-def parse_pair_ids(dataset_config: Dict[str, Any]) -> List[int]:
+def parse_pair_ids(dataset_config: dict[str, Any]) -> list[int]:
     r"""Parse the pair_id configuration to determine which sub-datasets to process.
 
     Resolves `dataset_config` to a list of pair IDs. Supports a single integer,
@@ -153,7 +154,7 @@ def get_prediction_timesteps(dataset_name: str, pair_id: int, subset: str = "tes
     return prediction_timesteps
 
 
-def get_training_timesteps(dataset_name: str, pair_id: int) -> List[np.ndarray]:
+def get_training_timesteps(dataset_name: str, pair_id: int) -> list[np.ndarray]:
     r"""Return time steps for each training matrix for the given dataset and pair.
 
     One 1D array per training matrix in the pair, built from metadata
@@ -197,7 +198,7 @@ def get_training_timesteps(dataset_name: str, pair_id: int) -> List[np.ndarray]:
         raise ValueError(f"Provided {dataset_name} config does not have 'matrix_start_index' or it is empty")
 
     # Get training matrix shape
-    prediction_timesteps_list: list[np.ndarray] = list()
+    prediction_timesteps_list: list[np.ndarray] = []
     for train_mat_name in train_mat_names:
         train_mat_shape = metadata["matrix_shapes"].get(train_mat_name, None)
         if train_mat_shape is None:
@@ -255,7 +256,7 @@ def _load_mat_file(file_path: Path) -> np.ndarray:
         raise FileNotFoundError(f"Dataset file not found: {file_path}")
 
     mat_data = loadmat(str(file_path))
-    keys = [key for key in mat_data.keys() if not key.startswith("__")]
+    keys = [key for key in mat_data if not key.startswith("__")]
     if len(keys) != 1:
         raise ValueError(f"Expected one main variable in {file_path}")
 
@@ -397,7 +398,7 @@ def _load_test_data(dataset_name: str, pair_id: int, transpose=False) -> np.ndar
     return test_data
 
 
-def load_dataset(dataset_name: str, pair_id: int, transpose=False) -> Tuple[list, Optional[np.ndarray]]:
+def load_dataset(dataset_name: str, pair_id: int, transpose=False) -> tuple[list, np.ndarray | None]:
     r"""Load train and initialization data for a given dataset and pair ID.
 
     Training matrices are loaded from the dataset ``train/`` directory according
@@ -455,7 +456,7 @@ def load_dataset(dataset_name: str, pair_id: int, transpose=False) -> Tuple[list
     return train_data, initialization_data
 
 
-def get_applicable_plots(dataset_name: str) -> List[str]:
+def get_applicable_plots(dataset_name: str) -> list[str]:
     r"""Return the list of applicable visualization types for the given dataset.
 
     Reads the ``visualizations`` key from the dataset config for `dataset_name`.
@@ -484,7 +485,7 @@ def get_applicable_plots(dataset_name: str) -> List[str]:
     return applicable_plots
 
 
-def get_metadata(dataset_name: str) -> Dict:
+def get_metadata(dataset_name: str) -> dict:
     r"""Return metadata for the given dataset.
 
     Returns the ``metadata`` section from the dataset YAML (e.g. ``delta_t``,
@@ -515,7 +516,7 @@ def get_metadata(dataset_name: str) -> Dict:
     return metadata
 
 
-def get_config(dataset_name: str) -> Dict[str, Any]:
+def get_config(dataset_name: str) -> dict[str, Any]:
     r"""Load and return the dataset configuration for the specified dataset.
 
     Reads ``data/{dataset_name}/{dataset_name}.yaml`` and returns the parsed
@@ -577,7 +578,7 @@ def get_validation_training_timesteps(dataset_name, pair_id, train_split=0.8):
         If `train_split` is not in (0, 1) or `pair_id` is not in 1–9.
     """
     # Load sub-dataset
-    train_data, init_data = load_dataset(dataset_name, pair_id)
+    train_data, _init_data = load_dataset(dataset_name, pair_id)
 
     # Get training and prediction timesteps
     training_timesteps = get_training_timesteps(dataset_name, pair_id)

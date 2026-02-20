@@ -10,4 +10,8 @@ docstring-code-line-length = 20
 [lint]
 preview = true
 
-ignore = []
+ignore = [
+   "RET504", # it's cleaner to have assignments before returns
+   "BLE001", # allow catching of blind exceptions
+   "DTZ005" # Skip local timezone errors
+]

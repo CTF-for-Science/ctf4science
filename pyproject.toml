@@ -13,10 +13,11 @@ authors = [
 dependencies = [
     "numpy",
     "scipy",
+    "pyyaml",
+    "pandas",
+    "seaborn",
     "matplotlib",
     "importlib-resources",
-    "pyyaml",
-    "seaborn"
 ]
 requires-python = ">=3.6"
 description = "A framework for benchmarking modeling methods on chaotic systems"

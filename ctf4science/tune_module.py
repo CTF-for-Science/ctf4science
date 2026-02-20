@@ -5,15 +5,17 @@ file or automatic discovery of configs in a model's
 ``tuning_config/config_*.yaml``.
 """
 
-import yaml
+import argparse
+import datetime
+import sys
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
 import ray
+import yaml
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Callable
-import datetime
-import argparse
-import sys
 
 from ctf4science.performance_module import PerformanceMonitor
 
@@ -170,19 +172,19 @@ class ModelTuner:
     def __init__(
         self,
         config_path: str,
-        model_name: Optional[str] = None,
+        model_name: str | None = None,
         save_final_config: bool = True,
         metric: str = "score",
         mode: str = "max",
         ignore_reinit_error: bool = False,
         time_budget_hours: float = 24.0,  # Default time budget of 24 hours
         use_asha: bool = False,  # Whether to use ASHA scheduler
-        asha_config: Optional[Dict[str, Any]] = None,  # Configuration for ASHA scheduler
+        asha_config: dict[str, Any] | None = None,  # Configuration for ASHA scheduler
         gpus_per_trial: int = 0,  # Number of GPUs to use per trial (0 means use all available)
         enable_performance_monitoring: bool = False,  # Whether to enable performance monitoring (average time per run)
-        performance_output_dir: Optional[str] = None,  # Directory for performance results
-        ray_results_dir: Optional[str] = None,  # Directory for Ray temporary results
-        run_opt_main: Optional[Callable[[str], None]] = None,
+        performance_output_dir: str | None = None,  # Directory for performance results
+        ray_results_dir: str | None = None,  # Directory for Ray temporary results
+        run_opt_main: Callable[[str], None] | None = None,
     ) -> None:
         r"""Initialize the ModelTuner; see class docstring for parameters."""
 
@@ -273,7 +275,7 @@ class ModelTuner:
                 if self.ray_results_dir:
                     print(f"  - Ray results directory: {self.ray_results_dir}")
             except Exception as e:
-                print(f"Warning: Ray initialization had issues: {str(e)}")
+                print(f"Warning: Ray initialization had issues: {e!s}")
                 print("Attempting to continue with local execution...")
                 ray_init_kwargs = {"ignore_reinit_error": self.ignore_reinit_error, "local_mode": True}
                 if self.ray_results_dir:
@@ -348,7 +350,7 @@ class ModelTuner:
             f"or ensure config_path contains 'tuning_config' directory"
         )
 
-    def _validate_config(self, config: Dict[str, Any]) -> None:
+    def _validate_config(self, config: dict[str, Any]) -> None:
         r"""Validate that the configuration has required sections.
 
         Checks for the presence of ``dataset``, ``model``, and ``hyperparameters``
@@ -369,7 +371,7 @@ class ModelTuner:
             if section not in config:
                 raise ValueError(f"Missing required section in config: {section}")
 
-    def _validate_param_space(self, param_space: Dict[str, Any]) -> None:
+    def _validate_param_space(self, param_space: dict[str, Any]) -> None:
         r"""Validate the parameter space configuration.
 
         Ensures each parameter has a valid ``type`` (e.g. uniform, loguniform,
@@ -392,7 +394,7 @@ class ModelTuner:
 
         for param_name, param_config in param_space.items():
             if not isinstance(param_config, dict):
-                raise ValueError(f"Parameter {param_name} must be a dictionary")
+                raise TypeError(f"Parameter {param_name} must be a dictionary")
 
             param_type = param_config.get("type")
             if not param_type:
@@ -435,21 +437,18 @@ class ModelTuner:
                     )
 
             # Validate q for q-prefixed parameters
-            if param_type.startswith("q"):
-                if "q" not in param_config:
-                    raise ValueError(f"Missing q value for parameter {param_name}")
+            if param_type.startswith("q") and "q" not in param_config:
+                raise ValueError(f"Missing q value for parameter {param_name}")
 
             # Validate choices for choice type
-            if param_config["type"] == "choice":
-                if "choices" not in param_config:
-                    raise ValueError(f"Missing choices for parameter {param_name}")
+            if param_config["type"] == "choice" and "choices" not in param_config:
+                raise ValueError(f"Missing choices for parameter {param_name}")
 
             # Validate grid for grid_search type
-            if param_config["type"] == "grid_search":
-                if "grid" not in param_config:
-                    raise ValueError(f"Missing grid values for parameter {param_name}")
+            if param_config["type"] == "grid_search" and "grid" not in param_config:
+                raise ValueError(f"Missing grid values for parameter {param_name}")
 
-    def _objective(self, config: Dict[str, Any]) -> Dict[str, float]:
+    def _objective(self, config: dict[str, Any]) -> dict[str, float]:
         r"""Objective function for Ray Tune: run one trial and return the metric.
 
         Called by Ray Tune for each trial. Generates a config with the trial's
@@ -484,7 +483,7 @@ class ModelTuner:
             try:
                 self._run_opt_main(config_path)
             except Exception as e:
-                print(f"Training failed: {str(e)}")
+                print(f"Training failed: {e!s}")
                 # Return a very poor score to indicate failure
                 return {self.metric: float("-inf") if self.mode == "max" else float("inf")}
 
@@ -504,16 +503,17 @@ class ModelTuner:
 
             # Sum results (run_opt.py only evaluates the pair_ids specified in the config)
             score = self._sum_results(results)
-            # Return score with metric name
-            return {self.metric: score}
 
         except Exception as e:
-            print(f"Error in objective function: {str(e)}")
+            print(f"Error in objective function: {e!s}")
             # Return a very poor score to indicate failure
             return {self.metric: float("-inf") if self.mode == "max" else float("inf")}
 
+        # Return score with metric name
+        return {self.metric: score}
+
     @staticmethod
-    def _parse_pair_ids(dataset_config: Dict[str, Any]) -> Optional[List[int]]:
+    def _parse_pair_ids(dataset_config: dict[str, Any]) -> list[int] | None:
         r"""Parse pair_id from the dataset section of the config.
 
         Accepts a single int, a list of ints, or ``'all'``. Returns ``None``
@@ -569,11 +569,11 @@ class ModelTuner:
         total = 0
         for pair_dict in results["pairs"]:
             metric_dict = pair_dict["metrics"]
-            for metric in metric_dict.keys():
+            for metric in metric_dict:
                 total += metric_dict[metric]
         return total
 
-    def _create_search_space(self, tuning_config: Dict[str, Any]) -> Dict[str, Any]:
+    def _create_search_space(self, tuning_config: dict[str, Any]) -> dict[str, Any]:
         r"""Build a Ray Tune search space from the tuning config.
 
         Maps each parameter in `tuning_config` to a Ray Tune sampler (e.g.
@@ -601,10 +601,10 @@ class ModelTuner:
             choices) are missing for a parameter.
         """
         search_space = {}
-        for name in tuning_config.keys():
-            param_dict = tuning_config[name]
+        for name, value in tuning_config.items():
+            param_dict = value
             if "type" not in param_dict:
-                raise Exception(f"'type' not in {param_dict} keys")
+                raise KeyError(f"'type' not in {param_dict} keys")
 
             if param_dict["type"] == "uniform":
                 search_space[name] = tune.uniform(
@@ -663,11 +663,11 @@ class ModelTuner:
             elif param_dict["type"] == "grid_search":
                 search_space[name] = tune.grid_search(param_dict["grid"])
             else:
-                raise Exception(f"Parameter type {param_dict['type']} not supported.")
+                raise ValueError(f"Parameter type {param_dict['type']} not supported.")
 
         return search_space
 
-    def _generate_config(self, config: Dict[str, Any], template: Dict[str, Any], name: str) -> str:
+    def _generate_config(self, config: dict[str, Any], template: dict[str, Any], name: str) -> str:
         r"""Generate a YAML config file with the given hyperparameters.
 
         Writes `config` into ``template['model']`` and saves the result as
@@ -689,15 +689,15 @@ class ModelTuner:
             Path to the generated YAML file.
         """
         # Fill out dictionary
-        for blank_key in config.keys():
-            template["model"][blank_key] = config[blank_key]
+        for blank_key, value in config.items():
+            template["model"][blank_key] = value
         # Save config
         config_path = self.output_dir / f"{name}.yaml"
         with open(config_path, "w") as f:
             yaml.dump(template, f)
         return str(config_path)
 
-    def _get_resources(self) -> Dict[str, Any]:
+    def _get_resources(self) -> dict[str, Any]:
         r"""Get per-trial resource configuration for Ray Tune.
 
         Uses Ray cluster resources; reserves 2 CPUs for overhead and divides
@@ -903,7 +903,7 @@ class ModelTuner:
                 print(f"Metrics: {result.metrics}")
                 if hasattr(result, "error") and result.error:
                     print(f"Error: {result.error}")
-            raise RuntimeError(f"Failed to get best result: {str(e)}")
+            raise RuntimeError(f"Failed to get best result: {e!s}")
 
     @staticmethod
     def run_from_cli(description: str = "CTF Model Hyperparameter Tuner") -> None:
@@ -1069,7 +1069,7 @@ class ModelTuner:
                 )
                 tuner.run_optimization()
             except Exception as e:
-                print(f"Error tuning with config file {config_path}: {str(e)}")
+                print(f"Error tuning with config file {config_path}: {e!s}")
                 print("Continuing with next config file...")
                 continue
 

@@ -2,16 +2,15 @@
 Visualization Module for CTF models, generates visualizations of model predictions and evaluation metrics.
 """
 
-import yaml
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-from pathlib import Path
-from typing import List, Optional, Dict
-
 import importlib.resources as pkg_resources
+from pathlib import Path
 
-from ctf4science.data_module import get_applicable_plots, _load_test_data
+import matplotlib.pyplot as plt
+import numpy as np
+import yaml
+from matplotlib import cm
+
+from ctf4science.data_module import _load_test_data, get_applicable_plots
 from ctf4science.eval_module import compute_log_psd
 
 file_dir = Path(__file__).parent
@@ -152,7 +151,7 @@ class Visualization:
         - plt.Figure. The comparison figure.
     """
 
-    def __init__(self, config_path: Optional[Path | str] = None):
+    def __init__(self, config_path: Path | str | None = None):
         r"""Initialize the visualizer with default or custom config path.
 
         Loads YAML config from package default or from `config_path` and
@@ -169,7 +168,7 @@ class Visualization:
                 self.config = yaml.safe_load(f)
 
     def plot_trajectories(
-        self, truth: np.ndarray, predictions: List[np.ndarray], labels: Optional[List[str]] = None, **kwargs
+        self, truth: np.ndarray, predictions: list[np.ndarray], labels: list[str] | None = None, **kwargs
     ) -> plt.Figure:
         r"""Plot stacked trajectories for each variable, comparing truth and predictions.
 
@@ -230,7 +229,7 @@ class Visualization:
         plt.tight_layout()
         return fig
 
-    def plot_errors(self, errors: Dict[str, List[float]], labels: Optional[List[str]] = None, **kwargs) -> plt.Figure:
+    def plot_errors(self, errors: dict[str, list[float]], labels: list[str] | None = None, **kwargs) -> plt.Figure:
         r"""Plot error metrics over time or across sub-datasets.
 
         Parameters
@@ -276,10 +275,10 @@ class Visualization:
     def plot_histograms(
         self,
         truth: np.ndarray,
-        predictions: List[np.ndarray],
+        predictions: list[np.ndarray],
         modes: int,
         bins: int,
-        labels: Optional[List[str]] = None,
+        labels: list[str] | None = None,
         **kwargs,
     ) -> plt.Figure:
         r"""Plot histograms of variables over the last `modes` time steps.
@@ -342,10 +341,10 @@ class Visualization:
     def plot_psd(
         self,
         truth: np.ndarray,
-        predictions: List[np.ndarray],
+        predictions: list[np.ndarray],
         k: int,
         modes: int,
-        labels: Optional[List[str]] = None,
+        labels: list[str] | None = None,
         **kwargs,
     ) -> plt.Figure:
         r"""Plot log power spectral density over the last `k` time steps.
@@ -530,7 +529,7 @@ class Visualization:
         batch_name: str,
         pair_id: int,
         plot_type: str,
-        results_dir: Optional[str | Path] = None,
+        results_dir: str | Path | None = None,
     ) -> None:
         r"""Save the figure to the results directory under a visualizations subfolder.
 

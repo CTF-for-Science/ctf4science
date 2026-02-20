@@ -7,11 +7,12 @@ This module provides simplified performance monitoring focused on:
 Tracks total wall-clock time and calculates averages across multiple trials during hyperparameter tuning.
 """
 
-import time
 import logging
+import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, Callable, Tuple
+from typing import Any
 
 import yaml
 
@@ -72,7 +73,7 @@ class PerformanceMonitor:
         - None. Exceptions during write are logged but not raised.
     """
 
-    def __init__(self, output_dir: Optional[str] = None):
+    def __init__(self, output_dir: str | None = None):
         r"""Initialize the performance monitor and set the output directory."""
         self.output_dir = Path(output_dir) if output_dir else Path("results/performance_results")
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -118,7 +119,7 @@ class PerformanceMonitor:
         self.run_count += 1
         logger.debug(f"Recorded run {run_id}: {duration:.2f}s")
 
-    def stop_monitoring(self) -> Dict[str, Any]:
+    def stop_monitoring(self) -> dict[str, Any]:
         r"""Stop monitoring and return summary metrics.
 
         Computes total run time, average time per run, and session duration;
@@ -158,7 +159,7 @@ class PerformanceMonitor:
 
         return summary_metrics
 
-    def _save_summary_results(self, metrics: Dict[str, Any]) -> None:
+    def _save_summary_results(self, metrics: dict[str, Any]) -> None:
         r"""Save summary results to a YAML file in the output directory.
 
         Parameters
@@ -184,7 +185,7 @@ class PerformanceMonitor:
             logger.error(f"Error saving performance summary: {e}")
 
 
-def measure_time(func: Callable, *args, **kwargs) -> Tuple[Any, float]:
+def measure_time(func: Callable, *args, **kwargs) -> tuple[Any, float]:
     r"""Measure wall-clock time for a single call to a callable.
 
     Executes `func(*args, **kwargs)` and returns its result together with
@@ -216,8 +217,8 @@ def measure_time(func: Callable, *args, **kwargs) -> Tuple[Any, float]:
     try:
         result = func(*args, **kwargs)
         duration = time.time() - start_time
-        return result, duration
     except Exception as e:
         duration = time.time() - start_time
         logger.error(f"Function {func.__name__} failed after {duration:.2f}s: {e}")
         raise
+    return result, duration

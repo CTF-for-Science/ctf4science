@@ -21,6 +21,14 @@ def format(session):
 
 
 @nox.session
+def ltf(session):
+    session.install(".[dev]")
+    session.run("ruff", "format")
+    session.run("ruff", "check")
+    session.run("pyrefly", "check")
+
+
+@nox.session
 def typecheck(session):
     session.install(".[dev]")
     session.run("pyrefly", "check")
