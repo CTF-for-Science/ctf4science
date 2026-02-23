@@ -6,9 +6,9 @@ import importlib.resources as pkg_resources
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-from matplotlib import colormaps
 import numpy as np
 import yaml
+from matplotlib import colormaps
 
 from ctf4science.data_module import _load_test_data, get_applicable_plots
 from ctf4science.eval_module import compute_log_psd

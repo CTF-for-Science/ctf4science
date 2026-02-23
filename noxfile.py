@@ -2,41 +2,43 @@ import nox
 import glob
 
 
-@nox.session
+@nox.session(python=["3.13.7"])
 def test(session):
-    session.install(".[dev]")
+    session.install("-e", ".[dev,all]")
     session.run("pytest", "-v", "-s", "--cov", "--cov-report", "term-missing")
 
 
-@nox.session
+@nox.session(python=["3.13.7"])
 def lint(session):
     session.install("ruff")
     session.run("ruff", "check")
 
 
-@nox.session
+@nox.session(python=["3.13.7"])
 def format(session):
     session.install("ruff")
     session.run("ruff", "format")
 
 
-@nox.session
+@nox.session(python=["3.13.7"])
+def typecheck(session):
+    session.install("-e", ".[dev,all]")
+    session.run("python", "--version")
+    session.run("pyrefly", "--version")
+    session.run("pyrefly", "check")
+
+
+@nox.session(python=["3.13.7"])
 def ltf(session):
-    session.install(".[dev]")
+    session.install("-e", ".[dev,all]")
     session.run("ruff", "format")
     session.run("ruff", "check")
     session.run("pyrefly", "check")
 
 
-@nox.session
-def typecheck(session):
-    session.install(".[dev]")
-    session.run("pyrefly", "check")
-
-
-@nox.session
+@nox.session(python=["3.13.7"])
 def build_docs(session):
-    session.install(".[dev, ray]")
+    session.install("-e", ".[dev,ray]")
     session.run("rm", "-rf", "docs/build")
     session.run("rm", "-rf", "docs/source/generated")
     for rst_file in glob.glob("docs/source/*.rst"):

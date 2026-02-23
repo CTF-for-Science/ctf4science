@@ -602,7 +602,7 @@ class ModelTuner:
             If ``type`` is missing, unsupported, or required keys (e.g. bounds,
             choices) are missing for a parameter.
         """
-        search_space = {}
+        search_space: dict[str, Any] = {}
         for name, value in tuning_config.items():
             param_dict = value
             if "type" not in param_dict:
@@ -611,53 +611,53 @@ class ModelTuner:
             if param_dict["type"] == "uniform":
                 search_space[name] = tune.uniform(
                     param_dict["lower_bound"],
-                    param_dict["upper_bound"],  # pyrefly: ignore
+                    param_dict["upper_bound"],
                 )
             elif param_dict["type"] == "quniform":
                 search_space[name] = tune.quniform(
                     param_dict["lower_bound"],
-                    param_dict["upper_bound"],  # pyrefly: ignore
+                    param_dict["upper_bound"],
                     param_dict["q"],
                 )
             elif param_dict["type"] == "loguniform":
                 search_space[name] = tune.loguniform(
                     param_dict["lower_bound"],
-                    param_dict["upper_bound"],  # pyrefly: ignore
+                    param_dict["upper_bound"],
                 )
             elif param_dict["type"] == "qloguniform":
                 search_space[name] = tune.qloguniform(
                     param_dict["lower_bound"],
-                    param_dict["upper_bound"],  # pyrefly: ignore
+                    param_dict["upper_bound"],
                     param_dict["q"],
                 )
             elif param_dict["type"] == "randn":
-                search_space[name] = tune.randn(param_dict["lower_bound"], param_dict["upper_bound"])  # pyrefly: ignore
+                search_space[name] = tune.randn(param_dict["lower_bound"], param_dict["upper_bound"])
             elif param_dict["type"] == "qrandn":
                 search_space[name] = tune.qrandn(
                     param_dict["lower_bound"],
-                    param_dict["upper_bound"],  # pyrefly: ignore
+                    param_dict["upper_bound"],
                     param_dict["q"],
                 )
             elif param_dict["type"] == "randint":
                 search_space[name] = tune.randint(
                     param_dict["lower_bound"],
-                    param_dict["upper_bound"],  # pyrefly: ignore
+                    param_dict["upper_bound"],
                 )
             elif param_dict["type"] == "qrandint":
                 search_space[name] = tune.qrandint(
                     param_dict["lower_bound"],
-                    param_dict["upper_bound"],  # pyrefly: ignore
+                    param_dict["upper_bound"],
                     param_dict["q"],
                 )
             elif param_dict["type"] == "lograndint":
                 search_space[name] = tune.lograndint(
                     param_dict["lower_bound"],
-                    param_dict["upper_bound"],  # pyrefly: ignore
+                    param_dict["upper_bound"],
                 )
             elif param_dict["type"] == "qlograndint":
                 search_space[name] = tune.qlograndint(
                     param_dict["lower_bound"],
-                    param_dict["upper_bound"],  # pyrefly: ignore
+                    param_dict["upper_bound"],
                     param_dict["q"],
                 )
             elif param_dict["type"] == "choice":
@@ -822,7 +822,7 @@ class ModelTuner:
             print(f"Using time budget: {self.time_budget_hours} hours")
 
         # Create tuner with custom results directory
-        tuner_kwargs = {"trainable": trainable, "param_space": param_dict, "tune_config": tune_config}
+        tuner_kwargs: dict[str, Any] = {"trainable": trainable, "param_space": param_dict, "tune_config": tune_config}
 
         if self.ray_results_dir:
             tuner_kwargs["run_config"] = tune.RunConfig(storage_path=self.ray_results_dir)
