@@ -1,23 +1,16 @@
 Performance Module
 ==================
 
-This document describes the ``performance_module`` of the CTF for Science framework. It provides wall-clock time monitoring for model runs, used during benchmarking and hyperparameter tuning to track and summarize execution time.
+The Performance Module (``performance_module.py``) provides wall-clock time monitoring for model runs. It is used during benchmarking and hyperparameter tuning to track and summarize execution time.
 
 Overview
 --------
 
-The performance module provides:
+The performance module provides tools to:
 
-* **PerformanceMonitor** (class): Session-based monitoring that:
-
-  * Records start time and resets counters via ``start_monitoring()``
-  * Accepts per-run durations via ``record_run(run_id, duration)``
-  * Computes and returns summary metrics and writes a timestamped YAML file via ``stop_monitoring()``
-
-* **measure_time** (function): Wraps any callable, runs it once, and returns ``(result, duration_seconds)``. Useful for timing a single run or trial.
-* **Output**: Summary YAML files under a configurable directory (default ``results/performance_results``), with metrics such as total runs, total/average time per run, and session duration.
-
-Energy consumption is not measured in this module; it is handled at the SLURM job level using EAR via bash scripts.
+* **PerformanceMonitor** (class): Session-based monitoring that records start time, accepts per-run durations via ``record_run(run_id, duration)``, and writes a timestamped YAML summary via ``stop_monitoring()``
+* **measure_time** (function): Wraps any callable, runs it once, and returns ``(result, duration_seconds)``
+* **Output**: Summary YAML files under a configurable directory (default ``results/performance_results``), with total runs, total/average time per run, and session duration
 
 Please refer to :doc:`api` for the full API of the performance module.
 
@@ -35,7 +28,7 @@ Programmatic usage with **PerformanceMonitor** (e.g. inside a benchmark or tunin
 
    for i in range(num_runs):
        # ... run model ...
-       duration = 42.5  # seconds (e.g. from measure_time or similar)
+       duration = 42.5  # seconds (e.g. from measure_time)
        monitor.record_run(f"run_{i+1}", duration)
 
    summary = monitor.stop_monitoring()
@@ -51,26 +44,23 @@ Timing a single call with **measure_time**:
    result, duration = measure_time(my_function, arg1, arg2, kw=value)
    print(f"Completed in {duration:.2f}s")
 
-Summary Output
---------------
+Summary Metrics
+---------------
 
-When ``stop_monitoring()`` is called, the monitor writes a YAML file (e.g. ``performance_summary_YYYYMMDD_HHMMSS.yaml``) to the output directory. The returned (and saved) dictionary includes:
+The summary returned by ``stop_monitoring()`` (and written to YAML) includes:
 
-* ``total_num_runs``: Number of runs recorded
-* ``total_run_time_seconds`` / ``total_run_time_hours``: Cumulative run time
-* ``average_time_per_run_seconds`` / ``average_time_per_run_hours``: Mean duration per run
-* ``total_session_time_seconds`` / ``total_session_time_hours``: Wall time since ``start_monitoring()``
-* ``timestamp``: ISO format timestamp
+* **total_run_time_seconds**: Sum of all durations passed to ``record_run()`` — i.e. the cumulative run time of all runs.
+* **total_session_time_seconds**: Wall-clock time from ``start_monitoring()`` to ``stop_monitoring()`` — i.e. elapsed time of the whole session, including gaps between runs (loading, I/O, etc.).
 
 Integration
 -----------
 
-* **Benchmark module**: Uses ``PerformanceMonitor`` to track time across multiple evaluation runs and optionally record per-run duration.
-* **Tune module**: Can enable performance monitoring (``enable_performance_monitoring``) to record average time per trial and write summaries under the tune output directory.
+* **Benchmark module**: Uses ``PerformanceMonitor`` to track time across multiple evaluation runs
+* **Tune module**: Can enable performance monitoring (``enable_performance_monitoring``) to record average time per trial and write summaries under the tune output directory
 
 Notes
 -----
 
-* If ``stop_monitoring()`` is called without a prior ``start_monitoring()``, it returns an empty dict and does not write a file.
-* ``record_run`` raises ``ValueError`` if `duration` is negative.
-* ``measure_time`` re-raises any exception raised by the callable; the exception is logged before re-raising.
+* If ``stop_monitoring()`` is called without a prior ``start_monitoring()``, it returns an empty dict and does not write a file
+* ``record_run`` raises ``ValueError`` if `duration` is negative
+* ``measure_time`` re-raises any exception raised by the callable (after logging)
