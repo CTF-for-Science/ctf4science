@@ -6,9 +6,9 @@ import importlib.resources as pkg_resources
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib import colormaps
 import numpy as np
 import yaml
-from matplotlib import cm
 
 from ctf4science.data_module import _load_test_data, get_applicable_plots
 from ctf4science.eval_module import compute_log_psd
@@ -206,7 +206,7 @@ class Visualization:
 
         fig, axes = plt.subplots(num_vars, 1, figsize=config.get("figure_size", (10, 2 * num_vars)), sharex=True)
         time = np.arange(time_steps)
-        cmap = cm.get_cmap(config["colors"]["predictions"])
+        cmap = colormaps.get_cmap(config["colors"]["predictions"])
         colors = [cmap(i / max(1, len(predictions) - 1)) for i in range(len(predictions))]
 
         for i in range(num_vars):
@@ -323,7 +323,7 @@ class Visualization:
         labels = labels if labels else [f"Prediction {i + 1}" for i in range(len(predictions))]
 
         fig, axes = plt.subplots(num_vars, 1, figsize=config.get("figure_size", (10, 2 * num_vars)))
-        cmap = cm.get_cmap(config["colors"]["predictions"])
+        cmap = colormaps.get_cmap(config["colors"]["predictions"])
         colors = [cmap(i / max(1, len(predictions) - 1)) for i in range(len(predictions))]
 
         for i in range(num_vars):
@@ -392,7 +392,7 @@ class Visualization:
 
         freqs = np.fft.fftshift(np.fft.fftfreq(N))[N // 2 : N // 2 + modes]
         fig, ax = plt.subplots(figsize=config.get("figure_size", (10, 6)))
-        cmap = cm.get_cmap(config["colors"]["predictions"])
+        cmap = colormaps.get_cmap(config["colors"]["predictions"])
         colors = [cmap(i / max(1, len(predictions) - 1)) for i in range(len(predictions))]
 
         log_psd_truth = compute_log_psd(truth, k, modes)
@@ -464,7 +464,7 @@ class Visualization:
             bins = eval_params.get("bins", 50)
             return self.plot_histograms(test_data, predictions, modes, bins, labels=["Model Prediction"], **kwargs)
         elif plot_type == "psd":
-            k = eval_params.get("k", 20)
+            k = eval_params.get("k_long", 20)
             modes = eval_params.get("modes", 100)
             return self.plot_psd(test_data, predictions, k, modes, labels=["Model Prediction"], **kwargs)
         elif plot_type == "errors":
@@ -597,7 +597,7 @@ class Visualization:
         matplotlib.image.AxesImage
             The image returned by ``imshow``.
         """
-        cmap = cm.get_cmap(self.config["images"]["colormap"])
+        cmap = colormaps.get_cmap(self.config["images"]["colormap"])
         extent = [0, data.shape[1], data.shape[0], 0]
         img = ax.imshow(data, cmap=cmap, aspect="auto", origin="lower", extent=extent, vmin=vmin, vmax=vmax)
 

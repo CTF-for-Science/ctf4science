@@ -330,7 +330,12 @@ def evaluate(
 
 
 def evaluate_custom(
-    dataset_name: str, pair_id: int, truth: np.ndarray, prediction: np.ndarray, metrics: list[str] | None = None
+    dataset_name: str,
+    pair_id: int,
+    truth: np.ndarray,
+    prediction: np.ndarray,
+    metrics: list[str] | None = None,
+    flexible_k: bool = False,
 ) -> dict[str, float]:
     r"""Evaluate the prediction against a provided truth array using specified metrics.
 
@@ -350,6 +355,10 @@ def evaluate_custom(
         Predicted data array, same shape as `truth`.
     metrics : list of str, optional
         Metrics to compute. If None, uses the pair's default metrics from config.
+    flexible_k : bool, optional
+        Whether to use a flexible k value. If True, the k value is min(timesteps, k) for the metric..
+        If False, the k value is the value from the dataset config. Used for when hyperparameter
+        optimization results in less timesteps than the k value in the dataset config.
 
     Returns
     -------
@@ -374,7 +383,15 @@ def evaluate_custom(
     results = {}
     for metric in metrics:
         if metric == "short_time":
-            results["short_time"] = short_time_forecast(truth, prediction, evaluation_params["k"])
+            if flexible_k:
+                k_short = min(truth.shape[0], evaluation_params["k_short"])
+                if k_short != evaluation_params["k_short"]:
+                    print(
+                        f"WARNING: flexible_k is True, using k_short={k_short} instead of {evaluation_params['k_short']} from {dataset_name} config"
+                    )
+            else:
+                k_short = evaluation_params["k_short"]
+            results["short_time"] = short_time_forecast(truth, prediction, k_short)
         elif metric == "long_time":
             long_time_eval_type = config["evaluations"]["long_time"]
             if long_time_eval_type == "histogram_L2_error":
@@ -382,8 +399,16 @@ def evaluate_custom(
                     truth, prediction, evaluation_params["modes"], evaluation_params["bins"]
                 )
             elif long_time_eval_type == "spectral_L2_error":
+                if flexible_k:
+                    k_long = min(truth.shape[0], evaluation_params["k_long"])
+                    if k_long != evaluation_params["k_long"]:
+                        print(
+                            f"WARNING: flexible_k is True, using k_long={k_long} instead of {evaluation_params['k_long']} from {dataset_name} config"
+                        )
+                else:
+                    k_long = evaluation_params["k_long"]
                 results["long_time"] = long_time_forecast_spatio_temporal(
-                    truth, prediction, evaluation_params["k"], evaluation_params["modes"]
+                    truth, prediction, k_long, evaluation_params["modes"]
                 )
             else:
                 raise ValueError(f"Unknown dataset long time evaluation type: {long_time_eval_type}")

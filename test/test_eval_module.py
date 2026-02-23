@@ -56,7 +56,7 @@ class TestDataModule(unittest.TestCase):
         # Sample dataset configurations
         cls.dataset_config_0 = {
             "type": "spatio-temporal",
-            "evaluation_params": {"k": 20, "modes": 5},
+            "evaluation_params": {"k_short": 20, "k_long": 20, "modes": 5},
             "pairs": [
                 {"test": "X1test.mat", "id": 1, "metrics": ["short_time", "long_time", "reconstruction"]},
             ],
@@ -65,7 +65,7 @@ class TestDataModule(unittest.TestCase):
 
         cls.dataset_config_1 = {
             "type": "dynamical",
-            "evaluation_params": {"k": 20, "modes": 1000, "bins": 50},
+            "evaluation_params": {"k_short": 20, "k_long": 20, "modes": 1000, "bins": 50},
             "pairs": [
                 {"test": "X1test.mat", "id": 1, "metrics": []},
             ],
@@ -74,7 +74,7 @@ class TestDataModule(unittest.TestCase):
 
         cls.dataset_config_2 = {
             "type": "dynamical",
-            "evaluation_params": {"k": 1000, "bins": 50},
+            "evaluation_params": {"k_short": 1000, "k_long": 1000, "modes": 1000, "bins": 50},
             "pairs": [
                 {"test": "X1test.mat", "id": 1, "metrics": ["long_time"]},
             ],
@@ -83,7 +83,7 @@ class TestDataModule(unittest.TestCase):
 
         cls.dataset_config_3 = {
             "type": "dynamical",
-            "evaluation_params": {"k": 1000, "bins": 50},
+            "evaluation_params": {"k_short": 1000, "k_long": 1000, "modes": 1000, "bins": 50},
             "pairs": [
                 {"id": 1, "metrics": ["long_time", "short_time"]},
                 {"id": 2, "metrics": ["long_time", "short_time"]},
@@ -141,7 +141,7 @@ class TestDataModule(unittest.TestCase):
         lorenz_test_dir.mkdir(parents=True, exist_ok=True)
         lorenz_config = {
             "type": "dynamical",
-            "evaluation_params": {"k": 20, "modes": 500, "bins": 41},
+            "evaluation_params": {"k_short": 20, "k_long": 20, "modes": 500, "bins": 41},
             "pairs": [
                 {"id": 1, "train": ["X1train.mat"], "test": "X1test.mat", "metrics": ["short_time", "long_time"]},
                 {"id": 2, "train": ["X2train.mat"], "test": "X2test.mat", "metrics": ["reconstruction"]},
@@ -359,6 +359,32 @@ class TestDataModule(unittest.TestCase):
         res = evaluate_custom(
             "dataset_1", 1, self.mock_test_data, prediction_100, ["short_time", "long_time", "reconstruction"]
         )
+        self.assertIn("short_time", res)
+        self.assertIn("long_time", res)
+        self.assertIn("reconstruction", res)
+        self.assertAlmostEqual(res["short_time"], 100.0, places=6)
+        self.assertAlmostEqual(res["long_time"], 100.0, places=6)
+        self.assertAlmostEqual(res["reconstruction"], 100.0, places=6)
+
+    def test_evaluate_custom_flexible_k(self):
+        """
+        Call evaluate_custom with flexible_k=True when trajectory has fewer timesteps than config k.
+        Ensures k is capped to min(timesteps, k) so evaluation succeeds and scores are correct.
+        """
+        # Fewer timesteps (10) than dataset_0's k_short/k_long (20)
+        short_truth = np.ones((10, 20))
+        short_prediction = np.copy(short_truth)
+
+        with patch("builtins.print"):
+            # flexible_k=True: should use k=10 instead of 20, no index error
+            res = evaluate_custom(
+                "dataset_0",
+                1,
+                short_truth,
+                short_prediction,
+                metrics=["short_time", "long_time", "reconstruction"],
+                flexible_k=True,
+            )
         self.assertIn("short_time", res)
         self.assertIn("long_time", res)
         self.assertIn("reconstruction", res)

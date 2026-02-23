@@ -5,7 +5,7 @@ import glob
 @nox.session
 def test(session):
     session.install(".[dev]")
-    session.run("pytest", "-v", "--cov", "--cov-report", "term-missing")
+    session.run("pytest", "-v", "-s", "--cov", "--cov-report", "term-missing")
 
 
 @nox.session

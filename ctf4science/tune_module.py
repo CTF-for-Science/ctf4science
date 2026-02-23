@@ -8,6 +8,7 @@ file or automatic discovery of configs in a model's
 import argparse
 import datetime
 import sys
+import traceback
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -484,6 +485,7 @@ class ModelTuner:
                 self._run_opt_main(config_path)
             except Exception as e:
                 print(f"Training failed: {e!s}")
+                traceback.print_exc()
                 # Return a very poor score to indicate failure
                 return {self.metric: float("-inf") if self.mode == "max" else float("inf")}
 

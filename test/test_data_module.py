@@ -61,7 +61,7 @@ class TestDataModule(unittest.TestCase):
         # Sample dataset configurations
         cls.dataset_config_0 = {
             "type": "spatio-temporal",
-            "evaluation_params": {"k": 2, "modes": 10},
+            "evaluation_params": {"k_short": 2, "k_long": 4, "modes": 10},
             "pairs": [
                 {"id": 1, "train": ["X1train.mat"], "test": "X1test.mat", "metrics": ["short_time", "long_time"]},
                 {
@@ -89,7 +89,7 @@ class TestDataModule(unittest.TestCase):
         # Tries to load bad matrices
         cls.dataset_config_2 = {
             "type": "spatio-temporal",
-            "evaluation_params": {"k": 2, "modes": 10},
+            "evaluation_params": {"k_short": 2, "k_long": 4, "modes": 10},
             "pairs": [
                 {  # bad train matrix
                     "id": 1,
