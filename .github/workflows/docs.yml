@@ -7,8 +7,7 @@ on:
   push:
     branches:
       - "!gh-pages"
-      - "**" # TODO: Uncomment after Yue checks code
-      #- 'main' # TODO: Uncomment after Yue checks code
+      - 'main'
     paths: # Only generate documentation for changes to the CTF4Science package or documentation itself
       - 'ctf4science/**'
       - 'docs/**'
@@ -43,8 +42,7 @@ jobs:
           path: docs/build/html
       - name: Deploy documentation
         uses: peaceiris/actions-gh-pages@v3
-        # TODO: Change to "main" after Yue checks code
-        if: github.ref == 'refs/heads/website'
+        if: github.ref == 'refs/heads/main'
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: docs/build/html
