@@ -449,6 +449,7 @@ def evaluate_kaggle_csv(csv_path: str, dataset_name: str) -> dict[str, float]:
     Loads the CSV, groups rows by pair_id, converts each group to a (T, 3)
     prediction matrix, and runs the standard CTF evaluation for each pair.
     Returns per-pair metrics, E1–E12 in order, and their average (score).
+    Only works when test data is available for the selected dataset.
 
     Parameters
     ----------
@@ -468,19 +469,19 @@ def evaluate_kaggle_csv(csv_path: str, dataset_name: str) -> dict[str, float]:
     -----
     CSVs have the following format:
 
-    pair_id,timestep,x,y,z
-    1,0,value,value,value
-    1,1,value,value,value
-    1,2,value,value,value
+    id,pair_id,timestep,x,y,z
+    1_0,1,0,value,value,value
+    1_1,1,1,value,value,value
+    1_2,1,2,value,value,value
     ...
-    1,999,value,value,value
-    2,0,value,value,value
-    2,1,value,value,value
+    1_999,1,999,value,value,value
+    2_0,2,0,value,value,value
+    2_1,2,1,value,value,value
     ...
-    9,999,value,value,value
+    9_999,9,999,value,value,value
     """
     # Load CSV and check required columns
-    required = ["pair_id", "timestep", "x", "y", "z"]
+    required = ["id", "pair_id", "timestep", "x", "y", "z"]
     df = pd.read_csv(csv_path)
     for col in required:
         if col not in df.columns:

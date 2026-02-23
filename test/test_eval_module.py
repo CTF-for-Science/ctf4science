@@ -198,19 +198,16 @@ class TestDataModule(unittest.TestCase):
         cls.temp_dir.cleanup()
         cls.patcher1.stop()
         cls.patcher2.stop()
-        pass
 
     def setUp(self):
         """
         Called once before each unit test
         """
-        pass
 
     def tearDown(self):
         """
         Called once after each unit test
         """
-        pass
 
     def test_extract_metrics_in_order_success(self):
         """
@@ -456,10 +453,21 @@ class TestDataModule(unittest.TestCase):
         records = []
         for pair_id in sorted(rows_by_pair.keys()):
             arr = rows_by_pair[pair_id]
-            for t in range(arr.shape[0]):
-                records.append({"pair_id": pair_id, "timestep": t, "x": arr[t, 0], "y": arr[t, 1], "z": arr[t, 2]})
+            records.extend(
+                [
+                    {
+                        "id": f"{pair_id}_{t}",
+                        "pair_id": pair_id,
+                        "timestep": t,
+                        "x": arr[t, 0],
+                        "y": arr[t, 1],
+                        "z": arr[t, 2],
+                    }
+                    for t in range(arr.shape[0])
+                ]
+            )
         df = pd.DataFrame(records)
-        fd = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+        fd = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)  # noqa: SIM115
         fd.close()
         df.to_csv(fd.name, index=False)
         return fd.name
@@ -467,7 +475,7 @@ class TestDataModule(unittest.TestCase):
     def test_evaluate_kaggle_csv_missing_column(self):
         """evaluate_kaggle_csv raises ValueError when a required column is missing."""
         df = pd.DataFrame({"pair_id": [1], "timestep": [0], "x": [0.0], "y": [0.0]})  # missing z
-        fd = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+        fd = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)  # noqa: SIM115
         fd.close()
         df.to_csv(fd.name, index=False)
         try:
@@ -511,6 +519,7 @@ class TestDataModule(unittest.TestCase):
         """evaluate_kaggle_csv raises ValueError when config has no matrix_shapes for a pair."""
         df = pd.DataFrame(
             {
+                "id": list(range(20)),
                 "pair_id": [1] * 20,
                 "timestep": list(range(20)),
                 "x": [0.0] * 20,
@@ -518,7 +527,7 @@ class TestDataModule(unittest.TestCase):
                 "z": [0.0] * 20,
             }
         )
-        fd = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+        fd = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)  # noqa: SIM115
         fd.close()
         df.to_csv(fd.name, index=False)
         try:
