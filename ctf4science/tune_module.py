@@ -1,6 +1,6 @@
-r"""Tune module for CTF models.
+r"""Tune module for CTF models, orchestrates hyperparameter tuning using Ray Tune.
 
-Orchestrates hyperparameter tuning using Ray Tune. Supports a single config
+Supports a single config
 file or automatic discovery of configs in a model's
 ``tuning_config/config_*.yaml``.
 """
