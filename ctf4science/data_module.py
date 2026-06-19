@@ -78,10 +78,17 @@ def parse_pair_ids(dataset_config: dict[str, Any]) -> list[int]:
 
 
 def get_prediction_timesteps(dataset_name: str, pair_id: int, subset: str = "test") -> np.ndarray:
-    r"""Return time steps at which prediction matrices must be evaluated after training.
+    r"""Return physical time values at which predictions must be evaluated.
 
-    Uses dataset metadata (matrix shape, start index, ``delta_t``) to build a
-    1D array of time steps for the given `subset` matrix of the pair.
+    Computes absolute physical times using the formula::
+
+        timesteps[i] = (start_index + i) * delta_t,  i = 0, ..., N-1
+
+    where ``start_index = metadata['matrix_start_index'][matrix_name]``,
+    ``N = metadata['matrix_shapes'][matrix_name][0]`` (number of rows), and
+    ``delta_t = metadata['delta_t']``.  These are **absolute** times along the
+    underlying trajectory, not zero-based indices.  The first value is
+    ``start_index * delta_t`` and the last is ``(start_index + N - 1) * delta_t``.
 
     Parameters
     ----------
@@ -95,7 +102,22 @@ def get_prediction_timesteps(dataset_name: str, pair_id: int, subset: str = "tes
     Returns
     -------
     ndarray
-        1D array of time steps for evaluation.
+        1D array of length ``N`` with physical time values spanning
+        ``[start_index * delta_t, (start_index + N - 1) * delta_t]``.
+
+    Notes
+    -----
+    **Example — ODE_Lorenz, pair 1, subset='test'**:
+    ``X1test.mat`` has shape ``[1000, 3]``, ``start_index=10000``,
+    ``delta_t=0.05``.  Returns 1000 values in ``[500.0, 549.95]``.
+
+    **Example — ODE_Lorenz, pair 6, subset='test'**:
+    ``X6test.mat`` has shape ``[1000, 3]``, ``start_index=100``,
+    ``delta_t=0.05``.  Returns 1000 values in ``[5.0, 54.95]``.
+
+    See the dataset YAML configs under ``data/<dataset_name>/`` for the
+    ``matrix_shapes``, ``matrix_start_index``, and ``delta_t`` values for
+    every matrix.
 
     Raises
     ------
@@ -155,10 +177,17 @@ def get_prediction_timesteps(dataset_name: str, pair_id: int, subset: str = "tes
 
 
 def get_training_timesteps(dataset_name: str, pair_id: int) -> list[np.ndarray]:
-    r"""Return time steps for each training matrix for the given dataset and pair.
+    r"""Return physical time values for each training matrix of the given pair.
 
-    One 1D array per training matrix in the pair, built from metadata
-    (``matrix_shapes``, ``matrix_start_index``, ``delta_t``).
+    For each training matrix, computes absolute physical times using::
+
+        timesteps[i] = (start_index + i) * delta_t,  i = 0, ..., N-1
+
+    where ``start_index = metadata['matrix_start_index'][matrix_name]``,
+    ``N = metadata['matrix_shapes'][matrix_name][0]`` (number of rows), and
+    ``delta_t = metadata['delta_t']``.  Values are **absolute** physical times
+    along the underlying trajectory; the first value is
+    ``start_index * delta_t`` and the last is ``(start_index + N - 1) * delta_t``.
 
     Parameters
     ----------
@@ -170,7 +199,24 @@ def get_training_timesteps(dataset_name: str, pair_id: int) -> list[np.ndarray]:
     Returns
     -------
     list of ndarray
-        List of 1D arrays of time steps, one per training matrix.
+        One 1D array per training matrix.  Each array has ``N`` elements
+        spanning ``[start_index * delta_t, (start_index + N - 1) * delta_t]``.
+
+    Notes
+    -----
+    **Example — ODE_Lorenz, pair 1**:
+    ``X1train.mat`` has shape ``[10000, 3]``, ``start_index=0``,
+    ``delta_t=0.05``.  Returns a list with one array of 10000 values in
+    ``[0.0, 499.95]``.
+
+    **Example — ODE_Lorenz, pair 8**:
+    Three training matrices ``X6train``/``X7train``/``X8train``, each with
+    shape ``[10000, 3]``, ``start_index=0``, ``delta_t=0.05``.  Returns a
+    list of three arrays, each spanning ``[0.0, 499.95]``.
+
+    See the dataset YAML configs under ``data/<dataset_name>/`` for the
+    ``matrix_shapes``, ``matrix_start_index``, and ``delta_t`` values for
+    every matrix.
 
     Raises
     ------
@@ -575,10 +621,19 @@ def get_config(dataset_name: str) -> dict[str, Any]:
 def get_validation_training_timesteps(dataset_name, pair_id, train_split=0.8):
     r"""Return training timesteps used for the validation split.
 
-    For pair_ids 2 and 4, validation equals training (no split). For pair_ids
-    8 and 9, one training matrix is used as validation (second for 8, third
-    for 9). For pair_ids 1, 3, 5, 6, 7, the single training matrix is split by
-    `train_split` and the first fraction is used for training timesteps.
+    Returns physical time values (same units and formula as
+    :func:`get_training_timesteps`) after applying the validation split
+    logic.  The split behaviour depends on ``pair_id``:
+
+    * **pair_ids 2, 4** (reconstruction): no split; training timesteps are
+      returned unchanged.
+    * **pair_id 8**: the second training matrix is held out for validation;
+      its timesteps are removed from the returned list.
+    * **pair_id 9**: the third training matrix is held out; its timesteps are
+      removed.
+    * **pair_ids 1, 3, 5, 6, 7**: the single training matrix is split at
+      ``floor(train_split * N)`` rows; only the first portion's timesteps
+      are returned.
 
     Parameters
     ----------
@@ -594,7 +649,8 @@ def get_validation_training_timesteps(dataset_name, pair_id, train_split=0.8):
     -------
     list of ndarray
         Training timesteps for the validation setup (one array per training
-        matrix after applying the split logic).
+        matrix after applying the split logic).  Each array contains absolute
+        physical times computed as ``(start_index + i) * delta_t``.
 
     Raises
     ------
@@ -637,10 +693,17 @@ def get_validation_training_timesteps(dataset_name, pair_id, train_split=0.8):
 def get_validation_prediction_timesteps(dataset_name, pair_id, train_split=0.8):
     r"""Return prediction timesteps for the validation split.
 
-    For pair_ids 2 and 4 (reconstruction), prediction timesteps equal training.
-    For pair_ids 8 and 9, the timesteps come from the second or third training
-    matrix. For 1, 3, 5, 6, 7, the tail of the single matrix (after `train_split`)
-    is used as the validation prediction window.
+    Returns a 1D array of absolute physical times (same units and formula as
+    :func:`get_prediction_timesteps`) for the held-out validation window.
+    The source of these timesteps depends on ``pair_id``:
+
+    * **pair_ids 2, 4** (reconstruction): prediction timesteps equal the
+      full training matrix timesteps.
+    * **pair_id 8**: timesteps of the second training matrix (the held-out
+      validation matrix).
+    * **pair_id 9**: timesteps of the third training matrix.
+    * **pair_ids 1, 3, 5, 6, 7**: the tail of the single training matrix
+      (rows ``floor(train_split * N)`` onward).
 
     Parameters
     ----------
@@ -655,7 +718,8 @@ def get_validation_prediction_timesteps(dataset_name, pair_id, train_split=0.8):
     Returns
     -------
     ndarray
-        Timesteps for the validation prediction window.
+        1D array of absolute physical times for the validation prediction
+        window, computed as ``(start_index + i) * delta_t``.
 
     Raises
     ------

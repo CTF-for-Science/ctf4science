@@ -187,3 +187,4 @@ notebooks/*.tex
 data/
 docs/source/generated
 docs/build
+CLAUDE.md

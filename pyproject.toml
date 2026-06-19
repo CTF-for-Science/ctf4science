@@ -38,7 +38,7 @@ namespaces = true
 ctf4science = ["data/**/*", "ctf4science/config/**/*"]
 
 [project.optional-dependencies]
-all = ["jupyterlab","ray[data,train,tune,serve]","plotly","ipykernel"]
+all = ["jupyterlab","ray[data,train,tune,serve]","plotly","ipykernel","optuna"]
 notebooks = ["jupyterlab"]
 optuna = ["optuna"]
 ray = ["ray[data,train,tune,serve]"]

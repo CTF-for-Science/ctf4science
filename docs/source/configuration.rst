@@ -12,7 +12,7 @@ Running a model is typically done using the associated ``run.py`` script. An exa
 
    dataset:
      name: PDE_KS
-     pair_ids: [1] # or 1-3, or [1, 2, 3], or empty
+     pair_id: [1] # or 1-3, or [1, 2, 3], or empty
    model:
      batch_size: 128
      epochs: 50
@@ -26,7 +26,7 @@ Running a model is typically done using the associated ``run.py`` script. An exa
      seq_length: 30
      solver: fixed_rk4
 
-Notice that there are two top-level fields, the ``dataset`` and the ``model`` field. The ``dataset`` field specifies the associated dataset and pair_ids to train the model on. If ``pair_ids`` is omitted, it trains the model on *all* pair_ids. The ``model`` field contain the hyperparameters for training the model.
+Notice that there are two top-level fields, the ``dataset`` and the ``model`` field. The ``dataset`` field specifies the associated dataset and pair_id to train the model on. If ``pair_id`` is omitted, it trains the model on *all* pair_ids. The ``model`` field contain the hyperparameters for training the model.
 
 Tuning files
 ------------

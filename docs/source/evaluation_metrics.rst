@@ -11,116 +11,91 @@ Note: Not all dataset get their scores to correspond to the ``[-100, 100]`` rang
 
 This document outlines each metric's purpose, method of evaluation, and its corresponding dataset pair.
 
-Summary Table
--------------
 
-.. list-table::
+Dataset Pairs and Files
+-----------------------
+
+.. list-table:: Files and corresponding evaluation metrics (E\ :sub:`1`–E\ :sub:`12`) for benchmark datasets.
    :header-rows: 1
 
-   * - Metric
-     - Name
-     - Task Scenario
-     - Input Noise
-     - Data Regime
-     - Forecast Type
-     - Evaluation Type
-     - Dataset Pair ID
-   * - E1
-     - Short-Time Forecast Accuracy
-     - Baseline
-     - None
-     - Full
-     - Short-term
-     - Short-time
+   * - Score
+     - Pair ID
+     - Test
+     - Task
+     - Train / Burn-in File(s)
+     - Ground Truth File
+   * - E\ :sub:`1`
      - 1
-   * - E2
-     - Long-Time Forecast Accuracy
-     - Baseline
-     - None
-     - Full
-     - Long-term
+     - Forecasting
+     - Short-time
+     - :math:`\mathbf{X}_{1\text{train}}`
+     - :math:`\mathbf{X}_{1\text{test}}`
+   * - E\ :sub:`2`
+     - 1
+     - Forecasting
      - Long-time
-     - 1
-   * - E3
-     - Reconstruction (Medium Noise)
-     - Medium-noise denoising
-     - Medium
-     - Full
-     - N/A
-     - Short-time
+     - :math:`\mathbf{X}_{1\text{train}}`
+     - :math:`\mathbf{X}_{1\text{test}}`
+   * - E\ :sub:`3`
      - 2
-   * - E4
-     - Short-Time Forecast (Medium Noise)
-     - Forecast from noise
-     - Medium
-     - Full
-     - Short-term
-     - Long-time
+     - Noisy (medium)
+     - Reconstruction (denoising)
+     - :math:`\mathbf{X}_{2\text{train}}`
+     - :math:`\mathbf{X}_{2\text{test}}`
+   * - E\ :sub:`4`
      - 3
-   * - E5
-     - Reconstruction (High Noise)
-     - High-noise denoising
-     - High
-     - Full
-     - N/A
-     - Short-time
+     - Noisy (medium)
+     - Forecast (long-time)
+     - :math:`\mathbf{X}_{2\text{train}}`
+     - :math:`\mathbf{X}_{3\text{test}}`
+   * - E\ :sub:`5`
      - 4
-   * - E6
-     - Short-Time Forecast (High Noise)
-     - Forecast from noise
-     - High
-     - Full
-     - Short-term
-     - Long-time
+     - Noisy (high)
+     - Reconstruction (denoising)
+     - :math:`\mathbf{X}_{3\text{train}}`
+     - :math:`\mathbf{X}_{4\text{test}}`
+   * - E\ :sub:`6`
      - 5
-   * - E7
-     - Short-Time Forecast (Low Data, Clean)
-     - Few-shot clean
-     - None
-     - Sparse
-     - Short-term
-     - Short-time
+     - Noisy (high)
+     - Forecast (long-time)
+     - :math:`\mathbf{X}_{3\text{train}}`
+     - :math:`\mathbf{X}_{5\text{test}}`
+   * - E\ :sub:`7`
      - 6
-   * - E8
-     - Long-Time Forecast (Low Data, Clean)
-     - Few-shot clean
-     - None
-     - Sparse
-     - Long-term
-     - Long-time
+     - Limited Data (clean)
+     - Forecast (short-time)
+     - :math:`\mathbf{X}_{4\text{train}}`
+     - :math:`\mathbf{X}_{6\text{test}}`
+   * - E\ :sub:`8`
      - 6
-   * - E9
-     - Short-Time Forecast (Low Data, Noisy)
-     - Few-shot noisy
-     - Medium/High
-     - Sparse
-     - Short-term
-     - Short-time
+     - Limited Data (clean)
+     - Forecast (long-time)
+     - :math:`\mathbf{X}_{4\text{train}}`
+     - :math:`\mathbf{X}_{6\text{test}}`
+   * - E\ :sub:`9`
      - 7
-   * - E10
-     - Long-Time Forecast (Low Data, Noisy)
-     - Few-shot noisy
-     - Medium/High
-     - Sparse
-     - Long-term
-     - Long-time
+     - Limited Data (noisy)
+     - Forecast (short-time)
+     - :math:`\mathbf{X}_{5\text{train}}`
+     - :math:`\mathbf{X}_{7\text{test}}`
+   * - E\ :sub:`10`
      - 7
-   * - E11
-     - Parametric Gen. (Interpolation)
-     - Interpolation across λ
-     - None
-     - Full
-     - Short-term
-     - Short-time
+     - Limited Data (noisy)
+     - Forecast (long-time)
+     - :math:`\mathbf{X}_{5\text{train}}`
+     - :math:`\mathbf{X}_{7\text{test}}`
+   * - E\ :sub:`11`
      - 8
-   * - E12
-     - Parametric Gen. (Extrapolation)
-     - Extrapolation beyond λ
-     - None
-     - Full
-     - Short-term
-     - Short-time
+     - Parametric Generalization
+     - Interpolation forecast
+     - :math:`\mathbf{X}_{6,7,8\text{train}}` / :math:`\mathbf{X}_{9\text{train}}`
+     - :math:`\mathbf{X}_{8\text{test}}`
+   * - E\ :sub:`12`
      - 9
+     - Parametric Generalization
+     - Extrapolation forecast
+     - :math:`\mathbf{X}_{6,7,8\text{train}}` / :math:`\mathbf{X}_{10\text{train}}`
+     - :math:`\mathbf{X}_{9\text{test}}`
 
 Metric Descriptions
 -------------------
@@ -130,28 +105,28 @@ Metric Descriptions
 
 * **Pair**: ID 1
 * **Measures**: Accuracy over initial prediction steps.
-* **How**: Computes the root-mean-square error over the first *k* time steps between forecast and truth.
+* **How**: Computes the relative L2 error over the first *k* time steps between forecast and truth.
 
 **E2 – Long-Time Forecast Accuracy**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * **Pair**: ID 1
 * **Measures**: Fidelity of long-term behavior via statistics.
-* **How**: L2 distance between log power spectra (log-PSD) of forecast and truth over dominant modes.
+* **How**: For spatio-temporal datasets, computes the relative L2 distance between averaged power spectra (PSD) of forecast and truth over dominant Fourier modes. For dynamical datasets, computes the relative L1 distance between histograms of forecast and truth over each variable.
 
 **E3 – Reconstruction (Medium Noise)**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * **Pair**: ID 2
 * **Measures**: Ability to reconstruct clean signals from moderately noisy data.
-* **How**: L2 error between denoised output and noise-free reference.
+* **How**: Relative L2 error between denoised output and noise-free reference.
 
-**E4 – Short-Time Forecast (Medium Noise)**
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+**E4 – Long-Time Forecast (Medium Noise)**
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * **Pair**: ID 3
-* **Measures**: Short-term accuracy when initialized from noisy input.
-* **How**: Same as E1 but starting from medium-noise initial conditions.
+* **Measures**: Long-time statistical accuracy when forecasting from medium-noise initial conditions.
+* **How**: Same as E2 but starting from medium-noise initial conditions.
 
 **E5 – Reconstruction (High Noise)**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -160,19 +135,19 @@ Metric Descriptions
 * **Measures**: Denoising capability under high noise conditions.
 * **How**: Same as E3, but on data with stronger degradation.
 
-**E6 – Short-Time Forecast (High Noise)**
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+**E6 – Long-Time Forecast (High Noise)**
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * **Pair**: ID 5
-* **Measures**: Forecasting skill with severely noisy initializations.
-* **How**: Same as E1, but with high-noise input data.
+* **Measures**: Long-time statistical accuracy when forecasting from high-noise initial conditions.
+* **How**: Same as E2, but with high-noise input data.
 
 **E7 – Short-Time Forecast (Low Data, Clean)**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * **Pair**: ID 6
 * **Measures**: Forecasting accuracy from small clean datasets.
-* **How**: Same as E1 with training on just 51 time steps.
+* **How**: Same as E1.
 
 **E8 – Long-Time Forecast (Low Data, Clean)**
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
