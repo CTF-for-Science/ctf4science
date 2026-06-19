@@ -46,7 +46,7 @@ To preview documentation files, open ``docs/build/html/index.html`` locally in y
 Adding to Documentation
 -----------------------
 
-We use `Sphinx <https://www.sphinx-doc.org/en/master/index.html>`__ as our documentation generator. To add to the documentation, add to the ``source/`` directory. All files in this directory will be included in the documentation. Please read the `Sphinx documentation <https://www.sphinx-doc.org/en/master/usage/quickstart.html>`__ for more information on how to write documentation.
+We use `Sphinx <https://www.sphinx-doc.org/en/master/index.html>`__ as our documentation generator. To add to the documentation, add to the ``docs/source/`` directory. All files in this directory will be included in the documentation. Please read the `Sphinx documentation <https://www.sphinx-doc.org/en/master/usage/quickstart.html>`__ for more information on how to write documentation.
 
 Coding Standards
 ----------------
@@ -130,7 +130,7 @@ Testing is essential to ensure the reliability of the framework. We use Python's
 
     .. code-block:: bash
 
-       python -m unittest
+       pytest
 
   * Ensure all tests pass before submitting changes.
 

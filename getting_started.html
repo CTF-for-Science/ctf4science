@@ -27,22 +27,23 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="_static/styles/theme.css?digest=7f76b32a3354e82990f2" rel="stylesheet" />
-<link href="_static/styles/pydata-sphinx-theme.css?digest=7f76b32a3354e82990f2" rel="stylesheet" />
+  <link href="_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="_static/sphinx-design.min.css?v=95c83b7e" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="_static/scripts/fontawesome.js?digest=7f76b32a3354e82990f2"></script>
+  <script defer src="_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=7f76b32a3354e82990f2" />
-<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=7f76b32a3354e82990f2" />
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
     <script src="_static/documentation_options.js?v=5929fcd5"></script>
     <script src="_static/doctools.js?v=fd6eb6e6"></script>
     <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="_static/design-tabs.js?v=f930bc37"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'getting_started';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="genindex.html" />
@@ -69,7 +70,9 @@
   
   <button type="button" class="btn rounded-pill" id="pst-back-to-top">
     <i class="fa-solid fa-arrow-up"></i>Back to top</button>
-
+  
+  
+  
   
   <dialog id="pst-search-dialog">
     
@@ -223,11 +226,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
         <div class="navbar-item"><ul class="navbar-icon-links"
     aria-label="Icon Links">
@@ -240,8 +250,7 @@
           
           
           
-          <a href="https://github.com/CTF-for-Science/ctf4science" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i>
-            <span class="sr-only">GitHub</span></a>
+          <a href="https://github.com/CTF-for-Science/ctf4science" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
 </ul></div>
       
@@ -358,11 +367,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
           <div class="navbar-item"><ul class="navbar-icon-links"
     aria-label="Icon Links">
@@ -375,8 +391,7 @@
           
           
           
-          <a href="https://github.com/CTF-for-Science/ctf4science" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i>
-            <span class="sr-only">GitHub</span></a>
+          <a href="https://github.com/CTF-for-Science/ctf4science" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-square-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
         </li>
 </ul></div>
         
@@ -537,7 +552,7 @@ Install the framework as a Python package in editable mode:</p>
 <li><p><strong>Purpose</strong>: Handles dataset loading and sub-dataset selection.</p></li>
 <li><p><strong>Key Functions</strong>:</p>
 <ul>
-<li><p><code class="docutils literal notranslate"><span class="pre">load_dataset(dataset_name,</span> <span class="pre">pair_id,</span> <span class="pre">transpose=False)</span></code>: Loads train and test data for a specific sub-dataset.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">load_dataset(dataset_name,</span> <span class="pre">pair_id,</span> <span class="pre">transpose=False)</span></code>: Loads train and initialization data for a specific sub-dataset.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">parse_pair_ids(dataset_config)</span></code>: Interprets the <code class="docutils literal notranslate"><span class="pre">pair_id</span></code> configuration to determine which sub-datasets to process. It supports multiple formats (see “Configuring Your Run” below).</p></li>
 </ul>
 </li>
@@ -609,8 +624,111 @@ Install the framework as a Python package in editable mode:</p>
 <span class="w">  </span><span class="nt">method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">average</span>
 </pre></div>
 </div>
-<p>See <a class="reference internal" href="configuration.html"><span class="doc">Configuration File Overview</span></a> for full details (to be created).</p>
+<p>See <a class="reference internal" href="configuration.html"><span class="doc">Configuration File Overview</span></a> for full details.</p>
 </section>
+</section>
+<section id="dataset-pairs-and-evaluation-metrics">
+<h2>Dataset Pairs and Evaluation Metrics<a class="headerlink" href="#dataset-pairs-and-evaluation-metrics" title="Link to this heading">#</a></h2>
+<p>The table below shows which files are used for training/burn-in and evaluation for each metric E<sub>1</sub>–E<sub>12</sub>.</p>
+<div class="pst-scrollable-table-container"><table class="table" id="id1">
+<caption><span class="caption-text">Files and corresponding evaluation metrics (E<sub>1</sub>–E<sub>12</sub>) for benchmark datasets.</span><a class="headerlink" href="#id1" title="Link to this table">#</a></caption>
+<thead>
+<tr class="row-odd"><th class="head"><p>Score</p></th>
+<th class="head"><p>Pair ID</p></th>
+<th class="head"><p>Test</p></th>
+<th class="head"><p>Task</p></th>
+<th class="head"><p>Train / Burn-in File(s)</p></th>
+<th class="head"><p>Ground Truth File</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>E<sub>1</sub></p></td>
+<td><p>1</p></td>
+<td><p>Forecasting</p></td>
+<td><p>Short-time</p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{1\text{train}}\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{1\text{test}}\)</span></p></td>
+</tr>
+<tr class="row-odd"><td><p>E<sub>2</sub></p></td>
+<td><p>1</p></td>
+<td><p>Forecasting</p></td>
+<td><p>Long-time</p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{1\text{train}}\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{1\text{test}}\)</span></p></td>
+</tr>
+<tr class="row-even"><td><p>E<sub>3</sub></p></td>
+<td><p>2</p></td>
+<td><p>Noisy (medium)</p></td>
+<td><p>Reconstruction (denoising)</p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{2\text{train}}\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{2\text{test}}\)</span></p></td>
+</tr>
+<tr class="row-odd"><td><p>E<sub>4</sub></p></td>
+<td><p>3</p></td>
+<td><p>Noisy (medium)</p></td>
+<td><p>Forecast (long-time)</p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{2\text{train}}\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{3\text{test}}\)</span></p></td>
+</tr>
+<tr class="row-even"><td><p>E<sub>5</sub></p></td>
+<td><p>4</p></td>
+<td><p>Noisy (high)</p></td>
+<td><p>Reconstruction (denoising)</p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{3\text{train}}\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{4\text{test}}\)</span></p></td>
+</tr>
+<tr class="row-odd"><td><p>E<sub>6</sub></p></td>
+<td><p>5</p></td>
+<td><p>Noisy (high)</p></td>
+<td><p>Forecast (long-time)</p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{3\text{train}}\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{5\text{test}}\)</span></p></td>
+</tr>
+<tr class="row-even"><td><p>E<sub>7</sub></p></td>
+<td><p>6</p></td>
+<td><p>Limited Data (clean)</p></td>
+<td><p>Forecast (short-time)</p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{4\text{train}}\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{6\text{test}}\)</span></p></td>
+</tr>
+<tr class="row-odd"><td><p>E<sub>8</sub></p></td>
+<td><p>6</p></td>
+<td><p>Limited Data (clean)</p></td>
+<td><p>Forecast (long-time)</p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{4\text{train}}\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{6\text{test}}\)</span></p></td>
+</tr>
+<tr class="row-even"><td><p>E<sub>9</sub></p></td>
+<td><p>7</p></td>
+<td><p>Limited Data (noisy)</p></td>
+<td><p>Forecast (short-time)</p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{5\text{train}}\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{7\text{test}}\)</span></p></td>
+</tr>
+<tr class="row-odd"><td><p>E<sub>10</sub></p></td>
+<td><p>7</p></td>
+<td><p>Limited Data (noisy)</p></td>
+<td><p>Forecast (long-time)</p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{5\text{train}}\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{7\text{test}}\)</span></p></td>
+</tr>
+<tr class="row-even"><td><p>E<sub>11</sub></p></td>
+<td><p>8</p></td>
+<td><p>Parametric Generalization</p></td>
+<td><p>Interpolation forecast</p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{6,7,8\text{train}}\)</span> / <span class="math notranslate nohighlight">\(\mathbf{X}_{9\text{train}}\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{8\text{test}}\)</span></p></td>
+</tr>
+<tr class="row-odd"><td><p>E<sub>12</sub></p></td>
+<td><p>9</p></td>
+<td><p>Parametric Generalization</p></td>
+<td><p>Extrapolation forecast</p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{6,7,8\text{train}}\)</span> / <span class="math notranslate nohighlight">\(\mathbf{X}_{10\text{train}}\)</span></p></td>
+<td><p><span class="math notranslate nohighlight">\(\mathbf{X}_{9\text{test}}\)</span></p></td>
+</tr>
+</tbody>
+</table>
+</div>
 </section>
 <section id="contributing-a-new-model">
 <h2>Contributing a New Model<a class="headerlink" href="#contributing-a-new-model" title="Link to this heading">#</a></h2>
@@ -683,13 +801,13 @@ Install the framework as a Python package in editable mode:</p>
     <span class="c1"># Process each sub-dataset</span>
     <span class="k">for</span> <span class="n">pair_id</span> <span class="ow">in</span> <span class="n">pair_ids</span><span class="p">:</span>
         <span class="c1"># Load sub-dataset</span>
-        <span class="n">train_data</span><span class="p">,</span> <span class="n">test_data</span><span class="p">,</span> <span class="n">init_data</span> <span class="o">=</span> <span class="n">load_dataset</span><span class="p">(</span><span class="n">dataset_name</span><span class="p">,</span> <span class="n">pair_id</span><span class="p">)</span>
+        <span class="n">train_data</span><span class="p">,</span> <span class="n">init_data</span> <span class="o">=</span> <span class="n">load_dataset</span><span class="p">(</span><span class="n">dataset_name</span><span class="p">,</span> <span class="n">pair_id</span><span class="p">)</span>
         <span class="c1"># Initialize model</span>
         <span class="n">model</span> <span class="o">=</span> <span class="n">MyModel</span><span class="p">(</span><span class="n">config</span><span class="p">,</span> <span class="n">train_data</span><span class="p">)</span>
         <span class="c1"># Generate predictions</span>
-        <span class="n">predictions</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">()</span>
+        <span class="n">predictions</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">predict</span><span class="p">(</span><span class="n">init_data</span><span class="p">)</span>
         <span class="c1"># Evaluate predictions</span>
-        <span class="n">results</span> <span class="o">=</span> <span class="n">evaluate</span><span class="p">(</span><span class="n">dataset_name</span><span class="p">,</span> <span class="n">pair_id</span><span class="p">,</span> <span class="n">test_data</span><span class="p">,</span> <span class="n">predictions</span><span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">evaluate</span><span class="p">(</span><span class="n">dataset_name</span><span class="p">,</span> <span class="n">pair_id</span><span class="p">,</span> <span class="n">predictions</span><span class="p">)</span>
         <span class="c1"># Save results and get directory</span>
         <span class="n">results_directory</span> <span class="o">=</span> <span class="n">save_results</span><span class="p">(</span><span class="n">dataset_name</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="n">batch_id</span><span class="p">,</span> <span class="n">pair_id</span><span class="p">,</span> <span class="n">config</span><span class="p">,</span> <span class="n">predictions</span><span class="p">,</span> <span class="n">results</span><span class="p">)</span>
 
@@ -875,6 +993,7 @@ Install the framework as a Python package in editable mode:</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dataset-configuration-options">Dataset Configuration Options</a></li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dataset-pairs-and-evaluation-metrics">Dataset Pairs and Evaluation Metrics</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#contributing-a-new-model">Contributing a New Model</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-1-create-a-model-directory">Step 1: Create a Model Directory</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#step-2-implement-your-model">Step 2: Implement Your Model</a></li>
@@ -904,8 +1023,8 @@ Install the framework as a Python package in editable mode:</p>
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="_static/scripts/bootstrap.js?digest=7f76b32a3354e82990f2"></script>
-<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=7f76b32a3354e82990f2"></script>
+  <script defer src="_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -939,7 +1058,7 @@ Install the framework as a Python package in editable mode:</p>
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

@@ -87,7 +87,7 @@ The framework relies on three key modules:
   - **Purpose**: Handles dataset loading and sub-dataset selection.
   - **Key Functions**:
 
-    - ``load_dataset(dataset_name, pair_id, transpose=False)``: Loads train and test data for a specific sub-dataset.
+    - ``load_dataset(dataset_name, pair_id, transpose=False)``: Loads train and initialization data for a specific sub-dataset.
     - ``parse_pair_ids(dataset_config)``: Interprets the ``pair_id`` configuration to determine which sub-datasets to process. It supports multiple formats (see "Configuring Your Run" below).
 
 - ``eval_module.py``:
@@ -153,7 +153,94 @@ Example configuration:
      name: CTF_NaiveBaselines
      method: average
 
-See :doc:`configuration` for full details (to be created).
+See :doc:`configuration` for full details.
+
+Dataset Pairs and Evaluation Metrics
+-------------------------------------
+
+The table below shows which files are used for training/burn-in and evaluation for each metric E\ :sub:`1`–E\ :sub:`12`.
+
+.. list-table:: Files and corresponding evaluation metrics (E\ :sub:`1`–E\ :sub:`12`) for benchmark datasets.
+   :header-rows: 1
+
+   * - Score
+     - Pair ID
+     - Test
+     - Task
+     - Train / Burn-in File(s)
+     - Ground Truth File
+   * - E\ :sub:`1`
+     - 1
+     - Forecasting
+     - Short-time
+     - :math:`\mathbf{X}_{1\text{train}}`
+     - :math:`\mathbf{X}_{1\text{test}}`
+   * - E\ :sub:`2`
+     - 1
+     - Forecasting
+     - Long-time
+     - :math:`\mathbf{X}_{1\text{train}}`
+     - :math:`\mathbf{X}_{1\text{test}}`
+   * - E\ :sub:`3`
+     - 2
+     - Noisy (medium)
+     - Reconstruction (denoising)
+     - :math:`\mathbf{X}_{2\text{train}}`
+     - :math:`\mathbf{X}_{2\text{test}}`
+   * - E\ :sub:`4`
+     - 3
+     - Noisy (medium)
+     - Forecast (long-time)
+     - :math:`\mathbf{X}_{2\text{train}}`
+     - :math:`\mathbf{X}_{3\text{test}}`
+   * - E\ :sub:`5`
+     - 4
+     - Noisy (high)
+     - Reconstruction (denoising)
+     - :math:`\mathbf{X}_{3\text{train}}`
+     - :math:`\mathbf{X}_{4\text{test}}`
+   * - E\ :sub:`6`
+     - 5
+     - Noisy (high)
+     - Forecast (long-time)
+     - :math:`\mathbf{X}_{3\text{train}}`
+     - :math:`\mathbf{X}_{5\text{test}}`
+   * - E\ :sub:`7`
+     - 6
+     - Limited Data (clean)
+     - Forecast (short-time)
+     - :math:`\mathbf{X}_{4\text{train}}`
+     - :math:`\mathbf{X}_{6\text{test}}`
+   * - E\ :sub:`8`
+     - 6
+     - Limited Data (clean)
+     - Forecast (long-time)
+     - :math:`\mathbf{X}_{4\text{train}}`
+     - :math:`\mathbf{X}_{6\text{test}}`
+   * - E\ :sub:`9`
+     - 7
+     - Limited Data (noisy)
+     - Forecast (short-time)
+     - :math:`\mathbf{X}_{5\text{train}}`
+     - :math:`\mathbf{X}_{7\text{test}}`
+   * - E\ :sub:`10`
+     - 7
+     - Limited Data (noisy)
+     - Forecast (long-time)
+     - :math:`\mathbf{X}_{5\text{train}}`
+     - :math:`\mathbf{X}_{7\text{test}}`
+   * - E\ :sub:`11`
+     - 8
+     - Parametric Generalization
+     - Interpolation forecast
+     - :math:`\mathbf{X}_{6,7,8\text{train}}` / :math:`\mathbf{X}_{9\text{train}}`
+     - :math:`\mathbf{X}_{8\text{test}}`
+   * - E\ :sub:`12`
+     - 9
+     - Parametric Generalization
+     - Extrapolation forecast
+     - :math:`\mathbf{X}_{6,7,8\text{train}}` / :math:`\mathbf{X}_{10\text{train}}`
+     - :math:`\mathbf{X}_{9\text{test}}`
 
 Contributing a New Model
 ------------------------
@@ -236,13 +323,13 @@ Add a ``run.py`` file in ``models/MyModel/`` to handle batch runs across multipl
        # Process each sub-dataset
        for pair_id in pair_ids:
            # Load sub-dataset
-           train_data, test_data, init_data = load_dataset(dataset_name, pair_id)
+           train_data, init_data = load_dataset(dataset_name, pair_id)
            # Initialize model
            model = MyModel(config, train_data)
            # Generate predictions
-           predictions = model.predict()
+           predictions = model.predict(init_data)
            # Evaluate predictions
-           results = evaluate(dataset_name, pair_id, test_data, predictions)
+           results = evaluate(dataset_name, pair_id, predictions)
            # Save results and get directory
            results_directory = save_results(dataset_name, model_name, batch_id, pair_id, config, predictions, results)
 

@@ -63,7 +63,33 @@ For validation (e.g. hyperparameter tuning), use the validation helpers:
 
    val_train_t = get_validation_training_timesteps("ODE_Lorenz", 1, train_split=0.8)
    val_pred_t = get_validation_prediction_timesteps("ODE_Lorenz", 1, train_split=0.8)
-   train_data, init_data = load_validation_dataset("ODE_Lorenz", 1, train_split=0.8)
+   train_data, val_data, init_data = load_validation_dataset("ODE_Lorenz", 1, train_split=0.8)
+
+Timestep Convention
+-------------------
+
+All ``get_*_timesteps`` functions return **absolute physical times**, not
+zero-based row indices.  The formula is::
+
+    timesteps[i] = (start_index + i) * delta_t,   i = 0, ..., N-1
+
+where:
+
+* ``N`` — number of rows in the matrix (``metadata['matrix_shapes'][name][0]``)
+* ``start_index`` — absolute row offset in the underlying trajectory
+  (``metadata['matrix_start_index'][name]``)
+* ``delta_t`` — physical time step (``metadata['delta_t']``)
+
+So the returned array spans
+``[start_index * delta_t, (start_index + N - 1) * delta_t]``.
+
+This means that a test matrix whose ``start_index`` equals the length of the
+training matrix will have timesteps that begin exactly where training ends —
+the standard forecasting setup.  Reconstruction pairs (pair IDs 2 and 4)
+have ``start_index=0`` for both train and test, so their timestep ranges
+overlap completely.
+
+For concrete T ranges per dataset and pair, see :doc:`datasets`.
 
 Pair ID Configuration
 ---------------------
