@@ -61,3 +61,6 @@
 [submodule "models/SpatialTemporalModel"]
 	path = models/SpatialTemporalModel
 	url = https://github.com/joeGermany/SpatialTemporalModel.git
+[submodule "models/ZOR_ESN_Hybrid"]
+	path = models/ZOR_ESN_Hybrid
+	url = https://github.com/dumitrunovic-svg/ZOR-ESN-Hybrid-CTF.git
