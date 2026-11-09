@@ -722,7 +722,7 @@ class Visualization:
         num_fields : int
             Number of fields to average.
         \*\*kwargs
-            Override config (e.g. ``figure_size``).
+            Override config (e.g. ``figure_size``, ``plot_shape`` as ``(nrows, ncols)``).
 
         Returns
         -------
@@ -739,13 +739,19 @@ class Visualization:
             
         labels = [f"Prediction {i + 1}" for i in range(len(predictions))]
 
-        fig, axs = plt.subplots(num_fields, 1, figsize=config.get("figure_size", (num_fields * 6, 4)), sharex=True)
+        # figure_size and plot_shape: kwargs override config; default is one field per row
+        fig_size = config.get("figure_size") or (8, num_fields * 4)
+        nrows, ncols = config.get("plot_shape") or (num_fields, 1)
+        assert nrows * ncols >= num_fields, f"plot_shape {nrows}x{ncols} cannot accommodate {num_fields} fields"
+
+        fig, axs = plt.subplots(nrows, ncols, figsize=fig_size, sharex=True)
+        axs = np.array(axs).reshape(-1)  # Flatten in case of multiple rows/cols
         time = np.arange(time_steps)
         cmap = colormaps.get_cmap(config["colors"]["predictions"])
         colors = [cmap(i / max(1, len(predictions) - 1)) for i in range(len(predictions))]
 
         for ii in range(num_fields):
-            ax = axs[ii] if num_fields > 1 else axs  # type: ignore[index]
+            ax = axs[ii]
             truth_avg = truth[:, ii * Nh : (ii + 1) * Nh].mean(axis=1)
             ax.plot(time, truth_avg, label="Truth", color=config["colors"]["truth"], linestyle=config["linestyles"]["truth"])
             for j, pred in enumerate(predictions):
@@ -754,10 +760,10 @@ class Visualization:
             ax.set_ylabel("Field " + str(ii + 1))
             ax.legend()
 
-        if num_fields > 1:
-            axs[-1].set_xlabel("Time") 
-        else:
-            axs.set_xlabel("Time")  # type: ignore[union-attr]
+        # hide unused axes when plot_shape has more slots than fields
+        for ax in axs[num_fields:]:
+            ax.set_visible(False)
+        axs[num_fields - 1].set_xlabel("Time")
 
         plt.tight_layout()
         return fig
@@ -799,9 +805,9 @@ class Visualization:
         nrows = len(predictions) + 1  # one row for truth, one for each prediction
         ncols = num_fields
 
-        fig, axs = plt.subplots(nrows, ncols, figsize=(ncols * 5, nrows * 4), sharex=True, sharey=True)
+        fig, axs = plt.subplots(nrows, ncols, figsize=(ncols * 5, nrows * 4))
 
-        for ii in range(num_fields):
+        for ii in range(ncols):
             _min = min(truth[time_step, ii * Nh : (ii + 1) * Nh])
             _max = max(truth[time_step, ii * Nh : (ii + 1) * Nh])
 
