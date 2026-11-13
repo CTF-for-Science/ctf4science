@@ -2,28 +2,28 @@ import nox
 import glob
 
 
-@nox.session(python=["3.13.7"])
+@nox.session(python=["3.13"])
 def test(session):
     if not isinstance(session.virtualenv, nox.virtualenv.PassthroughEnv):
         session.install("-e", ".[dev,all]")
     session.run("pytest", "-v", "-s", "--cov", "--cov-report", "term-missing")
 
 
-@nox.session(python=["3.13.7"])
+@nox.session(python=["3.13"])
 def lint(session):
     if not isinstance(session.virtualenv, nox.virtualenv.PassthroughEnv):
         session.install("ruff")
     session.run("ruff", "check")
 
 
-@nox.session(python=["3.13.7"])
+@nox.session(python=["3.13"])
 def format(session):
     if not isinstance(session.virtualenv, nox.virtualenv.PassthroughEnv):
         session.install("ruff")
     session.run("ruff", "format")
 
 
-@nox.session(python=["3.13.7"])
+@nox.session(python=["3.13"])
 def typecheck(session):
     if not isinstance(session.virtualenv, nox.virtualenv.PassthroughEnv):
         session.install("-e", ".[dev,all]")
@@ -32,7 +32,7 @@ def typecheck(session):
     session.run("pyrefly", "check")
 
 
-@nox.session(python=["3.13.7"])
+@nox.session(python=["3.13"])
 def ltf(session):
     if not isinstance(session.virtualenv, nox.virtualenv.PassthroughEnv):
         session.install("-e", ".[dev,all]")
@@ -41,7 +41,7 @@ def ltf(session):
     session.run("pyrefly", "check")
 
 
-@nox.session(python=["3.13.7"])
+@nox.session(python=["3.13"])
 def build_docs(session):
     if not isinstance(session.virtualenv, nox.virtualenv.PassthroughEnv):
         session.install("-e", ".[dev,ray]")
