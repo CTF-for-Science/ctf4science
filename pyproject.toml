@@ -55,6 +55,6 @@ dev  = [
     "hatchling>=1.28.0",
     "pydata-sphinx-theme>=0.16.1",
     "nox>=2026.2.9",
-    "sphinx-design>=0.7.0"
+    "sphinx-design>=0.8.0"
 ]
 
