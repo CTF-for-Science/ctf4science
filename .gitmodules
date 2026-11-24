@@ -48,7 +48,7 @@
 	url = git@github.com:CTF-for-Science/moirai.git
 [submodule "models/sundial"]
 	path = models/sundial
-	url = https://github.com/CTF-for-Science/sundial.git
+	url = git@github.com:CTF-for-Science/sundial.git
 [submodule "models/ctftabpfn"]
 	path = models/ctftabpfn
 	url = git@github.com:CTF-for-Science/ctftabpfn.git
