@@ -501,10 +501,11 @@ def load_dataset(dataset_name: str, pair_id: int, transpose=False) -> tuple[list
 
     return train_data, initialization_data
 
+
 def load_nodes(dataset_name: str) -> np.ndarray:
     r"""Load the mesh/node information for a given dataset.
 
-    Reads the ``nodes.npy`` file located in the root directory of the 
+    Reads the ``nodes.npy`` file located in the root directory of the
     specified dataset.
 
     Parameters
@@ -523,8 +524,9 @@ def load_nodes(dataset_name: str) -> np.ndarray:
         If ``nodes.npy`` does not exist in the dataset folder.
     """
     node_file = top_dir / "data" / dataset_name / "nodes.npy"
-    
+
     return _load_npy_file(node_file)
+
 
 def get_applicable_plots(dataset_name: str) -> list[str]:
     r"""Return the list of applicable visualization types for the given dataset.

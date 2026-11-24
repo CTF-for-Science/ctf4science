@@ -2,13 +2,13 @@ import tempfile
 import unittest
 import warnings
 from pathlib import Path
+from unittest.mock import patch
 
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
-from unittest.mock import patch
 
-from ctf4science.visualization_module import Visualization
+from ctf4science.visualization_module import Visualization, add_masked_regions, resolve_field_layout
 
 
 class TestVisualizationModule(unittest.TestCase):
@@ -410,3 +410,113 @@ class TestVisualizationModule(unittest.TestCase):
         missing_cfg = self.top_dir / "does_not_exist.yaml"
         with self.assertRaises(FileNotFoundError):
             Visualization(config_path=missing_cfg)
+
+    # ------------------------------------------------------------------
+    # Multi-field layout (evaluation_params.num_fields / metadata.field_sizes)
+    # ------------------------------------------------------------------
+    def test_resolve_field_layout_unequal_equal_and_errors(self):
+        """
+        resolve_field_layout honours field_sizes, falls back to equal splits, and validates.
+        """
+        slices, labels = resolve_field_layout(7, 2, field_sizes=[1, 6], field_names=["a", "b"])
+        self.assertEqual(slices, [slice(0, 1), slice(1, 7)])
+        self.assertEqual(labels, ["a", "b"])
+
+        # Equal split without field_sizes (unchanged behaviour), default labels
+        slices, labels = resolve_field_layout(10, 2)
+        self.assertEqual(slices, [slice(0, 5), slice(5, 10)])
+        self.assertEqual(labels, ["Field 1", "Field 2"])
+
+        with self.assertRaisesRegex(ValueError, "sum to"):
+            resolve_field_layout(7, 2, field_sizes=[1, 5])
+        with self.assertRaisesRegex(ValueError, "num_fields"):
+            resolve_field_layout(7, 3, field_sizes=[1, 6])
+        with self.assertRaisesRegex(ValueError, "equal fields"):
+            resolve_field_layout(7, 2)
+        with self.assertRaisesRegex(ValueError, "field names"):
+            resolve_field_layout(7, 2, field_sizes=[1, 6], field_names=["only_one"])
+
+    def test_plot_spatial_averages_unequal_field_sizes(self):
+        """
+        plot_spatial_averages averages over each field's own columns when widths differ.
+        """
+        rng = np.random.default_rng(0)
+        truth = rng.normal(size=(20, 7))
+        pred = truth + 1.0
+        fig = self.visualizer.plot_spatial_averages(
+            truth, [pred], 2, field_sizes=[1, 6], field_names=["mass_flow_rate", "temperatures"]
+        )
+        axes = fig.get_axes()
+        self.assertEqual(len(axes), 2)
+        self.assertEqual([ax.get_ylabel() for ax in axes], ["mass_flow_rate", "temperatures"])
+        np.testing.assert_allclose(axes[0].get_lines()[0].get_ydata(), truth[:, 0])
+        np.testing.assert_allclose(axes[1].get_lines()[0].get_ydata(), truth[:, 1:].mean(axis=1))
+        np.testing.assert_allclose(axes[1].get_lines()[1].get_ydata(), pred[:, 1:].mean(axis=1))
+        plt.close(fig)
+
+        with self.assertRaises(ValueError):
+            self.visualizer.plot_spatial_averages(truth, [pred], 2, field_sizes=[2, 6])
+
+    def test_plot_2d_contours_field_sizes(self):
+        """
+        plot_2d_contours accepts field_sizes/field_names and rejects fields that do not match the nodes.
+        """
+        rng = np.random.default_rng(1)
+        nodes = rng.uniform(size=(12, 2))
+        truth = rng.normal(size=(5, 24))
+        fig = self.visualizer.plot_2d_contours(
+            nodes, truth, [truth * 0.5], 2, levels=5, field_sizes=[12, 12], field_names=["T", "U"]
+        )
+        self.assertEqual(fig.get_axes()[0].get_title(), "T")
+        plt.close(fig)
+
+        with self.assertRaisesRegex(ValueError, "nodes"):
+            self.visualizer.plot_2d_contours(nodes, truth, [truth], 2, levels=5, field_sizes=[4, 20])
+
+    def test_plot_2d_contours_zero_field(self):
+        """
+        plot_2d_contours handles a field that is zero everywhere at the plotted time step.
+        """
+        rng = np.random.default_rng(2)
+        nodes = rng.uniform(size=(12, 2))
+        truth = np.zeros((5, 12))
+        fig = self.visualizer.plot_2d_contours(nodes, truth, [truth], 1, levels=5)
+        self.assertEqual(len(fig.get_axes()), 4)  # truth and prediction contours, each with a colorbar
+        plt.close(fig)
+
+    def test_add_masked_regions(self):
+        """
+        add_masked_regions adds one patch per region to every axes.
+        """
+        fig, axs = plt.subplots(1, 2)
+        add_masked_regions(fig, [(0.0, 0.0, 1.0, 1.0), (2.0, 2.0, 0.5, 0.5)])
+        self.assertEqual([len(ax.patches) for ax in axs], [2, 2])
+        plt.close(fig)
+
+    def test_plot_from_batch_spatial_averages_reads_field_metadata(self):
+        """
+        plot_from_batch('spatial_averages') reads metadata.field_sizes and metadata.fields.
+        """
+        name = "dataset_fields"
+        root = self.top_dir / "data" / name
+        (root / "test").mkdir(parents=True, exist_ok=True)
+        truth = np.arange(30 * 7, dtype=float).reshape(30, 7)
+        np.save(root / "test" / "X1test.npy", truth)
+        config = {
+            "type": "dynamical",
+            "evaluation_params": {"num_fields": 2},
+            "metadata": {"fields": ["scalar", "vector"], "field_sizes": [1, 6]},
+            "pairs": [{"id": 1, "test": "X1test.npy", "metrics": ["short_time"]}],
+            "visualizations": ["spatial_averages"],
+        }
+        with open(root / f"{name}.yaml", "w") as f:
+            yaml.safe_dump(config, f)
+        pair_dir = self.top_dir / "batches" / "batch_fields" / "pair1"
+        pair_dir.mkdir(parents=True, exist_ok=True)
+        np.save(pair_dir / "predictions.npy", truth * 0.5)
+
+        fig = self.visualizer.plot_from_batch(name, 1, str(pair_dir), plot_type="spatial_averages")
+        axes = fig.get_axes()
+        self.assertEqual([ax.get_ylabel() for ax in axes], ["scalar", "vector"])
+        np.testing.assert_allclose(axes[1].get_lines()[0].get_ydata(), truth[:, 1:].mean(axis=1))
+        plt.close(fig)

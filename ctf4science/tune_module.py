@@ -18,6 +18,8 @@ import yaml
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
 
+from ctf4science.data_module import get_config
+from ctf4science.eval_module import SCORE_MIN
 from ctf4science.performance_module import PerformanceMonitor
 
 top_dir = Path(__file__).parent.parent
@@ -221,6 +223,7 @@ class ModelTuner:
         self.save_final_config = save_final_config
         self.metric = metric
         self.mode = mode
+        self.failure_score = self._failure_score()
         self.ignore_reinit_error = ignore_reinit_error
         self.time_budget_hours = time_budget_hours
 
@@ -455,7 +458,7 @@ class ModelTuner:
         Called by Ray Tune for each trial. Generates a config with the trial's
         hyperparameters, runs the model via `run_opt_main`, loads results from
         the run's YAML, and returns a dict with the optimization metric (e.g. score).
-        On failure returns a poor score (e.g. ``-inf`` for maximize).
+        On failure returns ``self.failure_score`` (see `_failure_score`).
 
         Parameters
         ----------
@@ -487,7 +490,7 @@ class ModelTuner:
                 print(f"Training failed: {e!s}")
                 traceback.print_exc()
                 # Return a very poor score to indicate failure
-                return {self.metric: float("-inf") if self.mode == "max" else float("inf")}
+                return {self.metric: self.failure_score}
 
             # Extract results and clean up files
             # Get the directory where run_opt.py is located
@@ -496,7 +499,7 @@ class ModelTuner:
 
             if not results_path.exists():
                 print(f"Results file not found: {results_path}")
-                return {self.metric: float("-inf") if self.mode == "max" else float("inf")}
+                return {self.metric: self.failure_score}
 
             with open(results_path, "r") as f:
                 results = yaml.safe_load(f)
@@ -509,7 +512,7 @@ class ModelTuner:
         except Exception as e:
             print(f"Error in objective function: {e!s}")
             # Return a very poor score to indicate failure
-            return {self.metric: float("-inf") if self.mode == "max" else float("inf")}
+            return {self.metric: self.failure_score}
 
         # Return score with metric name
         return {self.metric: score}
@@ -549,6 +552,34 @@ class ModelTuner:
             return pair_id_config
         else:
             raise ValueError(f"Invalid pair_id configuration: {pair_id_config}. Expected int, list of ints, or 'all'")
+
+    def _failure_score(self) -> float:
+        r"""Return the score given to a trial that fails or produces no results.
+
+        The objective is the sum of every metric over the tuned pairs, and each
+        metric is clipped to [-100, 100] by `evaluate_custom`. A failed trial
+        therefore scores as if every metric got ``SCORE_MIN`` (-100), which is
+        the worst sum a real trial can reach, so failures rank last without
+        using ``-inf``. The metrics counted are each tuned pair's default
+        ``metrics`` from the dataset YAML.
+
+        Returns
+        -------
+        float
+            ``SCORE_MIN * num_metrics`` for ``mode='max'``, or its negation for
+            ``mode='min'``.
+
+        Raises
+        ------
+        ValueError
+            If none of the tuned pair IDs exist in the dataset config.
+        """
+        dataset_name = self.hp_config["dataset"]["name"]
+        pairs = [p for p in get_config(dataset_name)["pairs"] if self.pair_ids is None or p["id"] in self.pair_ids]
+        if not pairs:
+            raise ValueError(f"None of the pair IDs {self.pair_ids} exist in the {dataset_name} config")
+        worst = SCORE_MIN * sum(len(p["metrics"]) for p in pairs)
+        return worst if self.mode == "max" else -worst
 
     def _sum_results(self, results):
         r"""Sum all metric values from the evaluation results.

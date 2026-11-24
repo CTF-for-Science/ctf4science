@@ -1,27 +1,28 @@
-import yaml
 import tempfile
 import unittest
-from unittest.mock import patch
-import numpy as np
-from typing import Any
-from scipy.io import savemat
 from pathlib import Path
+from typing import Any
+from unittest.mock import patch
+
+import numpy as np
+import yaml
+from scipy.io import savemat
 
 from ctf4science.data_module import (
-    parse_pair_ids,
-    load_dataset,
-    get_applicable_plots,
-    get_metadata,
-    get_config,
-    _load_test_data,
     _load_mat_file,
     _load_npy_file,
     _load_npz_file,
+    _load_test_data,
+    get_applicable_plots,
+    get_config,
+    get_metadata,
     get_prediction_timesteps,
     get_training_timesteps,
-    load_validation_dataset,
-    get_validation_training_timesteps,
     get_validation_prediction_timesteps,
+    get_validation_training_timesteps,
+    load_dataset,
+    load_validation_dataset,
+    parse_pair_ids,
 )
 
 
@@ -490,19 +491,16 @@ class TestDataModule(unittest.TestCase):
         """
         cls.temp_dir.cleanup()
         cls.patcher.stop()
-        pass
 
     def setUp(self):
         """
         Called once before each unit test
         """
-        pass
 
     def tearDown(self):
         """
         Called once after each unit test
         """
-        pass
 
     def test_missing_dataset_name(self):
         """
@@ -1056,9 +1054,7 @@ class TestDataModule(unittest.TestCase):
                 val_data:  [y1 y2 y3 y4]
         """
         # Expected output
-        exp_train_data: list[Any] = list()
-        exp_train_data.append(self.mock_train_data_1)
-        exp_train_data.append(self.mock_train_data_3)
+        exp_train_data: list[Any] = [self.mock_train_data_1, self.mock_train_data_3]
 
         exp_init_data = self.mock_train_data_2[0 : self.init_len, :]
         exp_val_data = self.mock_train_data_2
@@ -1091,9 +1087,7 @@ class TestDataModule(unittest.TestCase):
                 val_data:  [y1 y2 y3 y4]
         """
         # Expected output
-        exp_train_data: list[Any] = list()
-        exp_train_data.append(self.mock_train_data_1)
-        exp_train_data.append(self.mock_train_data_3)
+        exp_train_data: list[Any] = [self.mock_train_data_1, self.mock_train_data_3]
 
         exp_init_data = self.mock_train_data_2[0 : self.init_len, :]
         exp_val_data = self.mock_train_data_2
@@ -1163,9 +1157,7 @@ class TestDataModule(unittest.TestCase):
                 val_data:  [z1 z2 z3 z4]
         """
         # Expected output
-        exp_train_data: list[Any] = list()
-        exp_train_data.append(self.mock_train_data_1)
-        exp_train_data.append(self.mock_train_data_2)
+        exp_train_data: list[Any] = [self.mock_train_data_1, self.mock_train_data_2]
 
         exp_init_data = self.mock_train_data_3[0 : self.init_len, :]
         exp_val_data = self.mock_train_data_3
@@ -1242,8 +1234,7 @@ class TestDataModule(unittest.TestCase):
                 val_data:  [x4]
         """
         # Expected output
-        exp_train_data = list()
-        exp_train_data.append(self.mock_train_data_1[0:80, :])
+        exp_train_data = [self.mock_train_data_1[0:80, :]]
 
         exp_val_data = self.mock_train_data_1[80:, :]
 
@@ -1311,8 +1302,7 @@ class TestDataModule(unittest.TestCase):
                 val_data:  [x1 x2 x3 x4]
         """
         # Expected output
-        exp_train_data = list()
-        exp_train_data.append(self.mock_train_data_1)
+        exp_train_data = [self.mock_train_data_1]
 
         exp_val_data = self.mock_train_data_1
 

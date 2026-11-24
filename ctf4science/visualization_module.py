@@ -3,6 +3,7 @@ Visualization Module for CTF models, generates visualizations of model predictio
 """
 
 import importlib.resources as pkg_resources
+import itertools
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -15,6 +16,84 @@ from ctf4science.eval_module import compute_log_psd
 
 file_dir = Path(__file__).parent
 top_dir = Path(__file__).parent.parent
+
+# Rectangles (x, y, width, height) to cover on contour plots, keyed by dataset name
+MASKED_REGIONS = {
+    "msfr": [(1.13, -0.94, 0.7, 1.88)],  # Blanket
+}
+
+
+def resolve_field_layout(
+    n_columns: int,
+    num_fields: int = 1,
+    field_sizes: list[int] | None = None,
+    field_names: list[str] | None = None,
+) -> tuple[list[slice], list[str]]:
+    r"""Split the spatial (column) axis into the column range and label of each field.
+
+    Multi-field datasets store their fields side by side along the column axis,
+    in the order given by ``metadata.fields``. Fields of unequal width (e.g.
+    ``dynasty``) give their widths in ``metadata.field_sizes``. Without
+    `field_sizes`, the columns are split into `num_fields` equal parts.
+
+    Parameters
+    ----------
+    n_columns : int
+        Number of columns (spatial points) in the data.
+    num_fields : int, optional
+        Number of fields (``evaluation_params.num_fields``). Default 1. Ignored
+        when `field_sizes` is given, except that it must match ``len(field_sizes)``
+        if it is not 1.
+    field_sizes : list of int, optional
+        Width of each field along the column axis (``metadata.field_sizes``).
+    field_names : list of str, optional
+        Name of each field (``metadata.fields``), used as plot labels. Defaults
+        to ``"Field 1"``, ``"Field 2"``, etc.
+
+    Returns
+    -------
+    slices : list of slice
+        Column slice of each field.
+    labels : list of str
+        Label of each field.
+
+    Raises
+    ------
+    ValueError
+        If `field_sizes` does not sum to `n_columns`, contains non-positive
+        entries, or disagrees with `num_fields`; if `n_columns` is not divisible
+        by `num_fields` (equal split); or if `field_names` has the wrong length.
+    """
+    if field_sizes is not None:
+        sizes = [int(x) for x in field_sizes]
+        if num_fields not in (1, len(sizes)):
+            raise ValueError(
+                f"num_fields ({num_fields}) does not match the number of field_sizes ({len(sizes)}: {sizes})"
+            )
+        if any(x <= 0 for x in sizes):
+            raise ValueError(f"field_sizes must be positive, got {sizes}")
+        if sum(sizes) != n_columns:
+            raise ValueError(f"field_sizes {sizes} sum to {sum(sizes)}, but the data has {n_columns} columns")
+    else:
+        if num_fields < 1:
+            raise ValueError(f"num_fields must be >= 1, got {num_fields}")
+        if n_columns % num_fields != 0:
+            raise ValueError(
+                f"Cannot split {n_columns} columns into {num_fields} equal fields; "
+                "set metadata.field_sizes in the dataset YAML for unequal field widths"
+            )
+        sizes = [n_columns // num_fields] * num_fields
+
+    bounds = np.cumsum([0] + sizes)
+    slices = [slice(int(a), int(b)) for a, b in itertools.pairwise(bounds)]
+
+    if field_names is not None:
+        labels = [str(name) for name in field_names]
+        if len(labels) != len(slices):
+            raise ValueError(f"Got {len(labels)} field names {labels} for {len(slices)} fields")
+    else:
+        labels = [f"Field {ii + 1}" for ii in range(len(slices))]
+    return slices, labels
 
 
 class Visualization:
@@ -95,7 +174,7 @@ class Visualization:
         - dataset_name : str. Dataset name (e.g. ``'ODE_Lorenz'``).
         - pair_id : int. Pair ID for the sub-dataset.
         - batch_id : str or path-like. Path to batch dir (predictions.npy, optionally evaluation_results.yaml).
-        - plot_type : str, optional. One of ``'trajectories'``, ``'histograms'``, ``'psd'``, ``'errors'``, ``'2d_comparison'``. Default ``'trajectories'``.
+        - plot_type : str, optional. One of ``'trajectories'``, ``'histograms'``, ``'psd'``, ``'errors'``, ``'2d_comparison'``, ``'spatial_averages'``, ``'contour2d'``. Default ``'trajectories'``.
         - \*\*kwargs : Passed to the underlying plot method.
     - Returns:
         - plt.Figure. The generated figure.
@@ -149,6 +228,38 @@ class Visualization:
         - show_titles : bool, optional. Whether to show subplot titles. Default True.
     - Returns:
         - plt.Figure. The comparison figure.
+
+    **plot_spatial_averages(self, truth, predictions, num_fields, field_sizes=None, field_names=None, \*\*kwargs):**
+
+    - Plot spatial averages over time for truth and predictions, one subplot per field.
+    - Parameters:
+        - truth : ndarray. Ground truth, shape (time_steps, spatial_dim), fields side by side along the columns.
+        - predictions : list of ndarray. Prediction arrays, same shape as `truth`.
+        - num_fields : int. Number of fields; columns are split equally when `field_sizes` is not given.
+        - field_sizes : list of int, optional. Width of each field, for fields of unequal width.
+        - field_names : list of str, optional. Field names used as labels.
+        - \*\*kwargs : Custom config overrides.
+    - Returns:
+        - plt.Figure. The generated figure.
+    - Raises ``ValueError`` if shapes mismatch or the field layout is inconsistent with the data.
+
+    **plot_2d_contours(self, nodes, truth, predictions, num_fields, time_step=-1, levels=30, field_sizes=None, field_names=None, \*\*kwargs):**
+
+    - Plot contours of truth and predictions at one time step, one column per field.
+    - Parameters:
+        - nodes : ndarray. Spatial node coordinates, shape (num_nodes, 2).
+        - truth : ndarray. Ground truth, shape (time_steps, spatial_dim), fields side by side along the columns.
+        - predictions : list of ndarray. Prediction arrays, same shape as `truth`.
+        - num_fields : int. Number of fields; columns are split equally when `field_sizes` is not given.
+        - time_step : int, optional. Time step to plot. Default -1 (last).
+        - levels : int, optional. Number of contour levels. Default 30.
+        - field_sizes : list of int, optional. Width of each field, for fields of unequal width.
+        - field_names : list of str, optional. Field names used as column titles.
+        - \*\*kwargs : Custom config overrides.
+    - Returns:
+        - plt.Figure. The generated figure.
+    - Raises ``ValueError`` if shapes mismatch, the field layout is inconsistent with the data, or a field's width
+      differs from the number of nodes.
     """
 
     def __init__(self, config_path: Path | str | None = None):
@@ -202,7 +313,7 @@ class Visualization:
             if pred.shape != truth.shape:
                 raise ValueError(f"Prediction shape {pred.shape} does not match truth shape {truth.shape}")
 
-        labels = labels if labels else [f"Prediction {i + 1}" for i in range(len(predictions))]
+        labels = labels or [f"Prediction {i + 1}" for i in range(len(predictions))]
 
         fig, axes = plt.subplots(num_vars, 1, figsize=config.get("figure_size", (10, 2 * num_vars)), sharex=True)
         time = np.arange(time_steps)
@@ -260,7 +371,7 @@ class Visualization:
             raise ValueError("All error lists must have the same length")
 
         fig, ax = plt.subplots(figsize=config.get("figure_size", (10, 6)))
-        labels = labels if labels else list(errors.keys())
+        labels = labels or list(errors.keys())
         if len(labels) != len(errors):
             raise ValueError(f"Number of labels ({len(labels)}) must match number of errors ({len(errors)})")
 
@@ -320,7 +431,7 @@ class Visualization:
             if pred.shape != truth.shape:
                 raise ValueError(f"Prediction shape {pred.shape} does not match truth shape {truth.shape}")
 
-        labels = labels if labels else [f"Prediction {i + 1}" for i in range(len(predictions))]
+        labels = labels or [f"Prediction {i + 1}" for i in range(len(predictions))]
 
         fig, axes = plt.subplots(num_vars, 1, figsize=config.get("figure_size", (10, 2 * num_vars)))
         cmap = colormaps.get_cmap(config["colors"]["predictions"])
@@ -388,7 +499,7 @@ class Visualization:
             if pred.shape != truth.shape:
                 raise ValueError(f"Prediction shape {pred.shape} does not match truth shape {truth.shape}")
 
-        labels = labels if labels else [f"Prediction {i + 1}" for i in range(len(predictions))]
+        labels = labels or [f"Prediction {i + 1}" for i in range(len(predictions))]
 
         freqs = np.fft.fftshift(np.fft.fftfreq(N))[N // 2 : N // 2 + modes]
         fig, ax = plt.subplots(figsize=config.get("figure_size", (10, 6)))
@@ -428,7 +539,12 @@ class Visualization:
             ``evaluation_results.yaml`` required for ``'errors'``).
         plot_type : str, optional
             One of ``'trajectories'``, ``'histograms'``, ``'psd'``,
-            ``'errors'``, ``'2d_comparison'``. Default ``'trajectories'``.
+            ``'errors'``, ``'2d_comparison'``, ``'spatial_averages'``,
+            ``'contour2d'``. Default ``'trajectories'``. The multi-field plots
+            (``'spatial_averages'``, ``'contour2d'``) use
+            ``evaluation_params.num_fields`` and, when present,
+            ``metadata.field_sizes`` (unequal field widths) and
+            ``metadata.fields`` (field labels) from the dataset YAML.
         \*\*kwargs
             Passed to the underlying plot method.
 
@@ -456,6 +572,12 @@ class Visualization:
         with open(config_path, "r") as f:
             dataset_config = yaml.safe_load(f)
         eval_params = dataset_config.get("evaluation_params", {})
+        metadata = dataset_config.get("metadata", {}) or {}
+        # Field widths and names for the multi-field plots
+        field_kwargs = {
+            "field_sizes": metadata.get("field_sizes"),
+            "field_names": metadata.get("fields"),
+        }
 
         if plot_type == "trajectories":
             return self.plot_trajectories(test_data, predictions, labels=["Model Prediction"], **kwargs)
@@ -484,18 +606,17 @@ class Visualization:
             return self.compare_prediction(test_data, predictions, **kwargs)
         elif plot_type == "spatial_averages":
             num_fields = eval_params.get("num_fields", 1)
-            return self.plot_spatial_averages(test_data, predictions, num_fields, **kwargs)
+            return self.plot_spatial_averages(test_data, predictions, num_fields, **{**field_kwargs, **kwargs})
         elif plot_type == "contour2d":
             num_fields = eval_params.get("num_fields", 1)
 
             # Load nodes for contour plotting (e.g. for MSFR)
             nodes = load_nodes(dataset_name)
 
-            fig =  self.plot_2d_contours(nodes, test_data, predictions, num_fields, **kwargs)
+            fig = self.plot_2d_contours(nodes, test_data, predictions, num_fields, **{**field_kwargs, **kwargs})
 
-            # Add blanket for MSFR
-            if dataset_name == "msfr":
-                add_blanket_msfr(fig)
+            # Cover regions that are not part of the fields (e.g. the MSFR blanket)
+            add_masked_regions(fig, MASKED_REGIONS.get(dataset_name, []))
 
             return fig
         else:
@@ -672,7 +793,7 @@ class Visualization:
             axs = np.array([axs])
 
         for i, prediction in enumerate(predictions):
-            vmin, vmax = min(truth.min(), prediction[i].min()), max(truth.max(), prediction.max())
+            vmin, vmax = min(truth.min(), prediction.min()), max(truth.max(), prediction.max())
             img_test = self.plot_prediction(
                 axs[i, 0], truth, vmin=vmin, vmax=vmax, show_ticks=show_ticks, show_xlabel=True, show_ylabel=True
             )
@@ -709,118 +830,195 @@ class Visualization:
                 cbar.set_label(label)  # type: ignore[arg-type]
         return fig
 
-    def plot_spatial_averages(self, truth, predictions, num_fields, **kwargs):
-        r"""
-        Plot spatial average quantities over time for truth and predictions.
+    def plot_spatial_averages(
+        self,
+        truth: np.ndarray,
+        predictions: list[np.ndarray],
+        num_fields: int,
+        field_sizes: list[int] | None = None,
+        field_names: list[str] | None = None,
+        **kwargs,
+    ) -> plt.Figure:
+        r"""Plot spatial averages over time for truth and predictions, one subplot per field.
+
+        Each subplot shows the mean over that field's columns.
 
         Parameters
         ----------
         truth : ndarray
-            Ground truth, shape (time_steps, spatial_dim).
+            Ground truth, shape (time_steps, spatial_dim). Fields are stored side
+            by side along the column axis.
         predictions : list of ndarray
             Prediction arrays, each same shape as `truth`.
         num_fields : int
-            Number of fields to average.
+            Number of fields to average. Without `field_sizes` the columns are
+            split into `num_fields` equal parts.
+        field_sizes : list of int, optional
+            Width of each field along the column axis (``metadata.field_sizes``),
+            for fields of unequal width. Must sum to ``truth.shape[1]``.
+        field_names : list of str, optional
+            Field names (``metadata.fields``) used as y-axis labels. Defaults to
+            ``"Field 1"``, ``"Field 2"``, etc.
         \*\*kwargs
-            Override config (e.g. ``figure_size``).
+            Override config (e.g. ``figure_size``). Without ``figure_size``, the
+            figure height scales with the number of fields.
 
         Returns
         -------
         matplotlib.figure.Figure
             The generated figure comparing spatial averages.
+
+        Raises
+        ------
+        ValueError
+            If a prediction shape does not match `truth`, or the field layout is
+            inconsistent with the data (see `resolve_field_layout`).
         """
         config = {**self.config, **kwargs}
-        Nh = truth.shape[1] // num_fields
+        field_slices, field_labels = resolve_field_layout(truth.shape[1], num_fields, field_sizes, field_names)
+        num_fields = len(field_slices)
         time_steps = truth.shape[0]
 
         for pred in predictions:
             if pred.shape != truth.shape:
                 raise ValueError(f"Prediction shape {pred.shape} does not match truth shape {truth.shape}")
-            
+
         labels = [f"Prediction {i + 1}" for i in range(len(predictions))]
 
-        fig, axs = plt.subplots(num_fields, 1, figsize=config.get("figure_size", (num_fields * 6, 4)), sharex=True)
+        # The config's default figure_size does not scale with the number of fields,
+        # so only an explicit override is used
+        figsize = kwargs.get("figure_size", (10, 2 * num_fields))
+        fig, axs = plt.subplots(num_fields, 1, figsize=figsize, sharex=True, squeeze=False)
+        axs = axs[:, 0]
         time = np.arange(time_steps)
         cmap = colormaps.get_cmap(config["colors"]["predictions"])
         colors = [cmap(i / max(1, len(predictions) - 1)) for i in range(len(predictions))]
 
-        for ii in range(num_fields):
-            ax = axs[ii] if num_fields > 1 else axs  # type: ignore[index]
-            truth_avg = truth[:, ii * Nh : (ii + 1) * Nh].mean(axis=1)
-            ax.plot(time, truth_avg, label="Truth", color=config["colors"]["truth"], linestyle=config["linestyles"]["truth"])
+        for ax, cols, field_label in zip(axs, field_slices, field_labels):
+            truth_avg = truth[:, cols].mean(axis=1)
+            ax.plot(
+                time, truth_avg, label="Truth", color=config["colors"]["truth"], linestyle=config["linestyles"]["truth"]
+            )
             for j, pred in enumerate(predictions):
-                pred_avg = pred[:, ii * Nh : (ii + 1) * Nh].mean(axis=1)
+                pred_avg = pred[:, cols].mean(axis=1)
                 ax.plot(time, pred_avg, label=labels[j], color=colors[j], linestyle=config["linestyles"]["predictions"])
-            ax.set_ylabel("Field " + str(ii + 1))
+            ax.set_ylabel(field_label)
             ax.legend()
 
-        if num_fields > 1:
-            axs[-1].set_xlabel("Time") 
-        else:
-            axs.set_xlabel("Time")  # type: ignore[union-attr]
+        axs[-1].set_xlabel("Time")
 
         plt.tight_layout()
         return fig
-    
-    def plot_2d_contours(self, nodes, truth, predictions, num_fields, 
-                         time_step = -1, 
-                         levels = 30, **kwargs):
-        r"""
-        Plot contour comparisons of truth and predictions for spatial fields.
+
+    def plot_2d_contours(
+        self,
+        nodes: np.ndarray,
+        truth: np.ndarray,
+        predictions: list[np.ndarray],
+        num_fields: int,
+        time_step: int = -1,
+        levels: int = 30,
+        field_sizes: list[int] | None = None,
+        field_names: list[str] | None = None,
+        **kwargs,
+    ) -> plt.Figure:
+        r"""Plot contours of truth and predictions at one time step, one column per field.
+
+        The first row shows the truth and each following row one prediction.
+        Every field must have one value per node.
 
         Parameters
         ----------
         nodes : ndarray
-            Spatial node coordinates, shape (Nh, 2)
+            Spatial node coordinates, shape (num_nodes, 2).
         truth : ndarray
-            Ground truth, shape (time_steps, spatial_dim).
+            Ground truth, shape (time_steps, spatial_dim). Fields are stored side
+            by side along the column axis.
         predictions : list of ndarray
             Prediction arrays, each same shape as `truth`.
         num_fields : int
-            Number of fields to plot.
+            Number of fields to plot. Without `field_sizes` the columns are
+            split into `num_fields` equal parts.
+        time_step : int, optional
+            Index of the time step to plot. Default -1 (last).
         levels : int, optional
-            Number of contour levels.
-        cmap : str, optional
-            Colormap for the contours.
+            Number of contour levels. Default 30.
+        field_sizes : list of int, optional
+            Width of each field along the column axis (``metadata.field_sizes``),
+            for fields of unequal width. Must sum to ``truth.shape[1]``.
+        field_names : list of str, optional
+            Field names (``metadata.fields``) used as column titles. Defaults to
+            ``"Field 1"``, ``"Field 2"``, etc.
         \*\*kwargs
-            Override config (e.g. ``figure_size``).
+            Override config (e.g. ``images``, ``figure_size``). Without
+            ``figure_size``, the figure size scales with the number of fields
+            and predictions.
 
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated contour figure.
+
+        Raises
+        ------
+        ValueError
+            If a prediction shape does not match `truth`, the field layout is
+            inconsistent with the data (see `resolve_field_layout`), or a field's
+            width differs from the number of nodes.
         """
-
         config = {**self.config, **kwargs}
-        Nh = truth.shape[1] // num_fields
+        field_slices, field_labels = resolve_field_layout(truth.shape[1], num_fields, field_sizes, field_names)
+        num_fields = len(field_slices)
+        for cols, field_label in zip(field_slices, field_labels):
+            width = cols.stop - cols.start
+            if width != nodes.shape[0]:
+                raise ValueError(
+                    f"Field '{field_label}' has {width} columns but there are {nodes.shape[0]} nodes, "
+                    "contour plots need one value per node for every field"
+                )
 
         for pred in predictions:
             if pred.shape != truth.shape:
                 raise ValueError(f"Prediction shape {pred.shape} does not match truth shape {truth.shape}")
-            
+
         labels = [f"Prediction {i + 1}" for i in range(len(predictions))]
 
         nrows = len(predictions) + 1  # one row for truth, one for each prediction
         ncols = num_fields
 
-        fig, axs = plt.subplots(nrows, ncols, figsize=(ncols * 5, nrows * 4), sharex=True, sharey=True)
+        # The default figure_size from the config is too small for a grid of contours,
+        # so only an explicit override is used
+        figsize = kwargs.get("figure_size", (ncols * 5, nrows * 4))
+        fig, axs = plt.subplots(nrows, ncols, figsize=figsize, sharex=True, sharey=True, squeeze=False)
 
-        for ii in range(num_fields):
-            _min = min(truth[time_step, ii * Nh : (ii + 1) * Nh])
-            _max = max(truth[time_step, ii * Nh : (ii + 1) * Nh])
+        for ii, cols in enumerate(field_slices):
+            _min = truth[time_step, cols].min()
+            _max = truth[time_step, cols].max()
 
             _min *= 0.9 if _min > 0 else 1.1
             _max *= 1.1 if _max > 0 else 0.9
 
+            # A field that is zero everywhere gives equal levels, which tricontourf rejects
+            if _min == _max:
+                _min, _max = -1.0, 1.0
+
             _levels = np.linspace(_min, _max, levels)
 
             # Plot truth contour
-            c = axs[0, ii].tricontourf(nodes[:, 0], nodes[:, 1], truth[time_step, ii * Nh : (ii + 1) * Nh], levels=_levels, cmap=config["images"]["colormap"])
-            fig.colorbar(c, ax=axs[0, ii], orientation='vertical', shrink=0.8, format="%.2f")
+            c = axs[0, ii].tricontourf(
+                nodes[:, 0], nodes[:, 1], truth[time_step, cols], levels=_levels, cmap=config["images"]["colormap"]
+            )
+            fig.colorbar(c, ax=axs[0, ii], orientation="vertical", shrink=0.8, format="%.2f")
 
             # Plot prediction contours
             for j, pred in enumerate(predictions):
-                c = axs[j + 1, ii].tricontourf(nodes[:, 0], nodes[:, 1], pred[time_step, ii * Nh : (ii + 1) * Nh], levels=_levels, cmap=config["images"]["colormap"])
-                fig.colorbar(c, ax=axs[j + 1, ii], orientation='vertical', shrink=0.8, format="%.2f")
+                c = axs[j + 1, ii].tricontourf(
+                    nodes[:, 0], nodes[:, 1], pred[time_step, cols], levels=_levels, cmap=config["images"]["colormap"]
+                )
+                fig.colorbar(c, ax=axs[j + 1, ii], orientation="vertical", shrink=0.8, format="%.2f")
 
             # Set labels and title
-            axs[0, ii].set_title(f"Field {ii + 1}")
+            axs[0, ii].set_title(field_labels[ii])
             if ii == 0:
                 axs[0, ii].set_ylabel("Truth")
                 for j in range(len(predictions)):
@@ -832,14 +1030,22 @@ class Visualization:
 
         return fig
 
-def add_blanket_msfr(fig):
-    r"""
-    Add a white region for the blanket in the MSFR dataset to the given figure.
-    """
 
+def add_masked_regions(fig: plt.Figure, regions: list[tuple[float, float, float, float]]) -> None:
+    r"""Cover rectangular regions with white patches on every axes of a contour figure.
+
+    Used for regions that are not part of the plotted fields, such as the
+    MSFR blanket.
+
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        Figure to modify in place.
+    regions : list of tuple of float
+        Rectangles as ``(x, y, width, height)`` in node coordinates, with
+        ``(x, y)`` the lower-left corner (see `MASKED_REGIONS`).
+    """
     for ax in fig.get_axes():
-        rec = patches.Rectangle((1.13, -1.88/2), 0.7, 1.88, 
-                                            linewidth=1, facecolor='white', 
-                                            edgecolor='black', zorder=3) 
-        
-        ax.add_patch(rec)
+        for x, y, width, height in regions:
+            rec = patches.Rectangle((x, y), width, height, linewidth=1, facecolor="white", edgecolor="black", zorder=3)
+            ax.add_patch(rec)

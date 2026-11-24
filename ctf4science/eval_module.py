@@ -16,6 +16,18 @@ from ctf4science.data_module import _load_test_data, get_config
 file_dir = Path(__file__).parent
 top_dir = Path(__file__).parent.parent
 
+# Metrics supported by evaluate_custom
+METRICS = ("short_time", "long_time", "reconstruction")
+
+# Long-time evaluation types supported by evaluate_custom (``evaluations.long_time`` in the dataset YAML)
+LONG_TIME_EVAL_TYPES = ("histogram_L2_error", "spectral_L2_error")
+
+# Range that evaluate_custom clips every score to, so a very poor prediction cannot dominate averages
+SCORE_MIN, SCORE_MAX = -100.0, 100.0
+
+# Score assigned to every metric when a prediction contains NaN or inf
+NONFINITE_SCORE = SCORE_MIN
+
 # Map (pair_id, metric_name) to E1–E12 index
 pair_id_to_e = {
     (1, "short_time"): 1,
@@ -363,7 +375,9 @@ def evaluate_custom(
     Returns
     -------
     dict
-        Mapping from metric name to computed score (float).
+        Mapping from metric name to computed score (float), clipped to
+        [``SCORE_MIN``, ``SCORE_MAX``] = [-100, 100]. If `prediction` contains
+        NaN or inf, every metric is scored as ``NONFINITE_SCORE`` (-100).
 
     Raises
     ------
@@ -381,8 +395,23 @@ def evaluate_custom(
     default_metrics = pair["metrics"]
     metrics = default_metrics if metrics is None else metrics
     results = {}
+    # Check metric names and the long-time evaluation type before looking at the prediction,
+    # so config errors raise even for non-finite predictions
     for metric in metrics:
-        if metric == "short_time":
+        if metric not in METRICS:
+            raise ValueError(f"Unknown metric: {metric}")
+    if "long_time" in metrics:
+        long_time_eval_type = config["evaluations"]["long_time"]
+        if long_time_eval_type not in LONG_TIME_EVAL_TYPES:
+            raise ValueError(f"Unknown dataset long time evaluation type: {long_time_eval_type}")
+    # Score diverged predictions (NaN or inf) as NONFINITE_SCORE, since the metrics cannot handle them
+    nonfinite = not np.isfinite(prediction).all()
+    if nonfinite:
+        print(f"WARNING: prediction contains NaN or inf, scoring every metric as {NONFINITE_SCORE}")
+    for metric in metrics:
+        if nonfinite:
+            results[metric] = NONFINITE_SCORE
+        elif metric == "short_time":
             if flexible_k:
                 k_short = min(truth.shape[0], evaluation_params["k_short"])
                 if k_short != evaluation_params["k_short"]:
@@ -416,7 +445,8 @@ def evaluate_custom(
             results["reconstruction"] = reconstruction(truth, prediction)
         else:
             raise ValueError(f"Unknown metric: {metric}")
-    return results
+    # Clip so a very poor prediction cannot dominate averages across pairs
+    return {metric: float(np.clip(score, SCORE_MIN, SCORE_MAX)) for metric, score in results.items()}
 
 
 def save_results(

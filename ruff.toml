@@ -1,5 +1,5 @@
 line-length=120
-include=["ctf4science/**/*.py", "tests/**/*.py"]
+include=["ctf4science/**/*.py", "test/**/*.py"]
 exclude=["models/**", "**/*.ipynb"]
 
 [format]

@@ -1,25 +1,26 @@
-import yaml
 import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
+
 import numpy as np
 import pandas as pd
+import yaml
 from scipy.io import savemat
-from pathlib import Path
 
-from unittest.mock import patch
 from ctf4science.data_module import _load_test_data
 from ctf4science.eval_module import (
-    short_time_forecast,
-    reconstruction,
-    long_time_forecast_dynamical,
     compute_log_psd,
-    long_time_forecast_spatio_temporal,
+    compute_psd,
     evaluate,
     evaluate_custom,
-    save_results,
-    compute_psd,
-    extract_metrics_in_order,
     evaluate_kaggle_csv,
+    extract_metrics_in_order,
+    long_time_forecast_dynamical,
+    long_time_forecast_spatio_temporal,
+    reconstruction,
+    save_results,
+    short_time_forecast,
 )
 
 
@@ -365,6 +366,33 @@ class TestDataModule(unittest.TestCase):
         self.assertAlmostEqual(res["short_time"], 100.0, places=6)
         self.assertAlmostEqual(res["long_time"], 100.0, places=6)
         self.assertAlmostEqual(res["reconstruction"], 100.0, places=6)
+
+    def test_evaluate_custom_nonfinite_prediction(self):
+        """
+        A prediction containing NaN or inf scores -100 on every metric
+        """
+        for bad in (np.nan, np.inf):
+            prediction = self.mock_test_data.astype(float).copy()
+            prediction[-1, 0] = bad
+            res = evaluate_custom("dataset_0", 1, self.mock_test_data, prediction)
+            self.assertEqual(res, {"short_time": -100.0, "long_time": -100.0, "reconstruction": -100.0})
+
+            # Unknown metrics still raise
+            with self.assertRaises(ValueError) as context:
+                evaluate_custom("dataset_0", 1, self.mock_test_data, prediction, ["random_metric"])
+            self.assertIn("Unknown metric", str(context.exception))
+
+    def test_evaluate_custom_clips_scores(self):
+        """
+        A very poor finite prediction is clipped to -100 instead of scoring far below it
+        """
+        prediction = self.mock_test_data.astype(float) * 1000
+        # The raw scores are far below -100, so clipping is what brings them to -100
+        self.assertLess(reconstruction(self.mock_test_data, prediction), -100.0)
+        res = evaluate_custom("dataset_0", 1, self.mock_test_data, prediction, ["short_time", "reconstruction"])
+        self.assertEqual(res, {"short_time": -100.0, "reconstruction": -100.0})
+        for score in res.values():
+            self.assertIsInstance(score, float)
 
     def test_evaluate_custom_flexible_k(self):
         """
