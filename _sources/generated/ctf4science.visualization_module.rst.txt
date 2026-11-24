@@ -12,7 +12,8 @@ ctf4science.visualization\_module
    .. autosummary::
       :toctree:
    
-      add_blanket_msfr
+      add_masked_regions
+      resolve_field_layout
 
 
 

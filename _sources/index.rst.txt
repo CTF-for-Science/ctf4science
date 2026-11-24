@@ -23,69 +23,73 @@ CTF4Science is a framework for comprehensive benchmarking of modeling methods on
     .. grid-item-card::
         :text-align: center
 
-        Getting started
-        ^^^
+        .. card-header::
+
+            Getting started
 
         New to CTF4Science? Check out the *Getting Started* Guide. It contains an
         introduction to the framework and how to get started.
 
-        +++
+        .. card-footer::
 
-        .. button-ref:: getting_started
-            :expand:
-            :color: secondary
-            :click-parent:
+            .. button-ref:: getting_started
+                :expand:
+                :color: secondary
+                :click-parent:
 
-            To the Getting Started guide
+                To the Getting Started guide
 
     .. grid-item-card::
         :text-align: center
 
-        Evaluation Metrics
-        ^^^
+        .. card-header::
+
+            Evaluation Metrics
 
         The *Evaluation Metrics* are the core metrics used to evaluate the performance of all tested models.
 
-        +++
+        .. card-footer::
 
-        .. button-ref:: evaluation_metrics
-            :expand:
-            :color: secondary
-            :click-parent:
+            .. button-ref:: evaluation_metrics
+                :expand:
+                :color: secondary
+                :click-parent:
 
-            To the Evaluation Metrics overview
+                To the Evaluation Metrics overview
 
     .. grid-item-card::
         :text-align: center
 
-        Modules
-        ^^^
+        .. card-header::
+
+            Modules
 
         The modules are the core components of the framework. They are responsible for loading datasets, evaluating models, and visualizing results. They also provide a readily accessible API for the user to use in their own evaluations and hyperparameter optimization workflows.
 
-        +++
+        .. card-footer::
 
-        .. button-ref:: modules
-            :expand:
-            :color: secondary
-            :click-parent:
+            .. button-ref:: modules
+                :expand:
+                :color: secondary
+                :click-parent:
 
-            To the Modules overview
+                To the Modules overview
 
     .. grid-item-card::
         :text-align: center
 
-        Contributor's guide
-        ^^^
+        .. card-header::
+
+            Contributor's guide
 
         Want to add to the codebase? The contributing guidelines will guide you through the
         process of improving the framework.
 
-        +++
+        .. card-footer::
 
-        .. button-ref:: contributing
-            :expand:
-            :color: secondary
-            :click-parent:
+            .. button-ref:: contributing
+                :expand:
+                :color: secondary
+                :click-parent:
 
-            To the Contributor's guide
+                To the Contributor's guide

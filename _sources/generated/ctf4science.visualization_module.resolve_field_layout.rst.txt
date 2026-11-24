@@ -1,0 +1,11 @@
+
+
+ctf4science.visualization\_module.resolve\_field\_layout
+========================================================
+
+.. currentmodule:: ctf4science.visualization_module
+
+
+
+.. autofunction:: ctf4science.visualization_module.resolve_field_layout
+

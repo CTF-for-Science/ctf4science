@@ -1,0 +1,11 @@
+
+
+ctf4science.visualization\_module.add\_masked\_regions
+======================================================
+
+.. currentmodule:: ctf4science.visualization_module
+
+
+
+.. autofunction:: ctf4science.visualization_module.add_masked_regions
+
