@@ -46,6 +46,6 @@ Typical Workflow
 Future Enhancements
 -------------------
 
-* Additional metrics (e.g., mean absolute error, KL-divergence)
+* Additional metrics (e.g., KL-divergence); ``mae``, ``rmse`` and ``mase`` are already available for windowed forecasting pairs such as ``buildings``
 * Per-variable breakdown of metrics
 * Support for multi-output models with task-specific metrics

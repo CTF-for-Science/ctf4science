@@ -11,13 +11,17 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from ctf4science.data_module import _load_test_data, get_config
+from ctf4science.data_module import _forecast_windows, _load_test_data, _window_params, get_config, is_lower_is_better
 
 file_dir = Path(__file__).parent
 top_dir = Path(__file__).parent.parent
 
 # Metrics supported by evaluate_custom
-METRICS = ("short_time", "long_time", "reconstruction")
+METRICS = ("short_time", "long_time", "reconstruction", "mae", "rmse", "mase")
+
+# Metrics of windowed forecasting pairs (pairs with a ``horizon`` key, e.g. ``buildings``); they score
+# predictions of shape (windows, horizon, buildings) and are errors, so lower is better
+WINDOWED_METRICS = ("mae", "rmse", "mase")
 
 # Long-time evaluation types supported by evaluate_custom (``evaluations.long_time`` in the dataset YAML)
 LONG_TIME_EVAL_TYPES = ("histogram_L2_error", "spectral_L2_error")
@@ -27,6 +31,11 @@ SCORE_MIN, SCORE_MAX = -100.0, 100.0
 
 # Score assigned to every metric when a prediction contains NaN or inf
 NONFINITE_SCORE = SCORE_MIN
+
+# Clip range and NaN/inf score for datasets whose YAML sets ``lower_is_better: true`` (error metrics):
+# a perfect prediction scores 0 and the worst score stays finite at SCORE_MAX
+LOWER_IS_BETTER_SCORE_MIN, LOWER_IS_BETTER_SCORE_MAX = 0.0, SCORE_MAX
+LOWER_IS_BETTER_NONFINITE_SCORE = LOWER_IS_BETTER_SCORE_MAX
 
 # Map (pair_id, metric_name) to E1–E12 index
 pair_id_to_e = {
@@ -300,6 +309,134 @@ def long_time_forecast_spatio_temporal(truth: np.ndarray, prediction: np.ndarray
     return float(100 * (1 - Elt))
 
 
+def mae(truth: np.ndarray, prediction: np.ndarray) -> float:
+    r"""Compute the mean absolute error over all elements.
+
+    For windowed pairs the arrays are ``(windows, horizon, buildings)``, so
+    this is the mean over every building, window and horizon step.
+
+    Parameters
+    ----------
+    truth : ndarray
+        Ground truth.
+    prediction : ndarray
+        Predicted data, same shape as `truth`.
+
+    Returns
+    -------
+    float
+        Mean absolute error, in the units of the data (0 = perfect).
+    """
+    error = np.asarray(prediction, dtype=np.float64) - np.asarray(truth, dtype=np.float64)
+    return float(np.mean(np.abs(error)))
+
+
+def rmse(truth: np.ndarray, prediction: np.ndarray) -> float:
+    r"""Compute the root mean squared error, pooled over all elements.
+
+    The squared errors are averaged over every building, window and horizon
+    step before taking the root.
+
+    Parameters
+    ----------
+    truth : ndarray
+        Ground truth.
+    prediction : ndarray
+        Predicted data, same shape as `truth`.
+
+    Returns
+    -------
+    float
+        Root mean squared error, in the units of the data (0 = perfect).
+    """
+    error = np.asarray(prediction, dtype=np.float64) - np.asarray(truth, dtype=np.float64)
+    return float(np.sqrt(np.mean(error**2)))
+
+
+def mase_scale(series: np.ndarray, lag: int) -> np.ndarray:
+    r"""Compute the per-building MASE scale: the mean absolute lag-`lag` difference of a series.
+
+    This is the mean absolute error of the naive forecast that repeats the
+    value `lag` steps earlier, over the whole continuous series.
+
+    Parameters
+    ----------
+    series : (T, B) ndarray
+        Continuous series of the target channel, time on axis 0.
+    lag : int
+        Lag of the naive forecast (the pair's horizon).
+
+    Returns
+    -------
+    (B,) ndarray
+        Scale of each building (column).
+
+    Raises
+    ------
+    ValueError
+        If the series has no more than `lag` rows.
+    """
+    series = np.asarray(series, dtype=np.float64)
+    if series.shape[0] <= lag:
+        raise ValueError(f"MASE scale needs more than lag={lag} rows, got {series.shape[0]}")
+    return np.mean(np.abs(series[lag:] - series[:-lag]), axis=0)
+
+
+def mase(truth: np.ndarray, prediction: np.ndarray, scale: np.ndarray) -> float:
+    r"""Compute the mean absolute scaled error, averaged over buildings.
+
+    Each building's MAE over all windows and horizon steps is divided by that
+    building's `scale` (see `mase_scale`); the result is the mean over
+    buildings. Buildings with a scale of 0 are left out of the mean.
+
+    Parameters
+    ----------
+    truth : (W, H, B) ndarray
+        Ground truth windows.
+    prediction : (W, H, B) ndarray
+        Predicted windows, same shape as `truth`.
+    scale : (B,) ndarray
+        Per-building scale.
+
+    Returns
+    -------
+    float
+        MASE (0 = perfect, 1 = as good as the naive forecast on average).
+
+    Raises
+    ------
+    ValueError
+        If every building has a scale of 0.
+    """
+    error = np.asarray(prediction, dtype=np.float64) - np.asarray(truth, dtype=np.float64)
+    building_mae = np.mean(np.abs(error).reshape(-1, error.shape[-1]), axis=0)
+    scale = np.asarray(scale, dtype=np.float64)
+    valid = scale > 0
+    if not valid.any():
+        raise ValueError("MASE is undefined: every building has a scale of 0")
+    return float(np.mean(building_mae[valid] / scale[valid]))
+
+
+def _windowed_scores(
+    metrics: list[str], target_series: np.ndarray, truth_windows: np.ndarray, prediction: np.ndarray, horizon: int
+) -> dict[str, float]:
+    r"""Compute the requested windowed metrics (``mae``, ``rmse``, ``mase``) of a windowed pair.
+
+    `truth_windows` and `prediction` are ``(W, horizon, B)``; `target_series`
+    is the continuous ``(T, B)`` target series the MASE scale is computed
+    from, with the naive lag equal to the pair's `horizon`.
+    """
+    scores: dict[str, float] = {}
+    for metric in metrics:
+        if metric == "mae":
+            scores["mae"] = mae(truth_windows, prediction)
+        elif metric == "rmse":
+            scores["rmse"] = rmse(truth_windows, prediction)
+        elif metric == "mase":
+            scores["mase"] = mase(truth_windows, prediction, mase_scale(target_series, horizon))
+    return scores
+
+
 def evaluate(
     dataset_name: str, pair_id: int, prediction: np.ndarray, metrics: list[str] | None = None
 ) -> dict[str, float]:
@@ -315,7 +452,10 @@ def evaluate(
     pair_id : int
         ID of the train-test pair to use.
     prediction : ndarray
-        Predicted data array (same shape as the test data for this pair).
+        Predicted data array (same shape as the test data for this pair). For
+        windowed pairs (pairs with a ``horizon``, e.g. ``buildings``), the
+        forecast of every window from `ctf4science.data_module.load_forecast_windows`,
+        shape ``(W, horizon, buildings)``.
     metrics : list of str, optional
         Metrics to compute (e.g. ``['short_time', 'long_time', 'reconstruction']``).
         If None, uses the pair's default metrics from config.
@@ -323,7 +463,8 @@ def evaluate(
     Returns
     -------
     dict
-        Mapping from metric name to computed score (float).
+        Mapping from metric name to computed score (float), clipped as in
+        `evaluate_custom`.
 
     Raises
     ------
@@ -362,11 +503,18 @@ def evaluate_custom(
     pair_id : int
         ID of the train-test pair (used to select config and metrics).
     truth : ndarray
-        Ground truth data array.
+        Ground truth data array. For windowed pairs (pairs with a ``horizon``),
+        the continuous series ``(T, buildings, channels)``, not windowed: the
+        truth windows are cut here from ``evaluation_params.target_channel``
+        with the same window function as the forecast loaders, and the MASE
+        scale is computed from the whole series.
     prediction : ndarray
-        Predicted data array, same shape as `truth`.
+        Predicted data array, same shape as `truth`; for windowed pairs
+        ``(W, horizon, buildings)``.
     metrics : list of str, optional
         Metrics to compute. If None, uses the pair's default metrics from config.
+        Windowed pairs support only ``mae``, ``rmse`` and ``mase``; other
+        pairs support only ``short_time``, ``long_time`` and ``reconstruction``.
     flexible_k : bool, optional
         Whether to use a flexible k value. If True, the k value is min(timesteps, k) for the metric..
         If False, the k value is the value from the dataset config. Used for when hyperparameter
@@ -378,12 +526,16 @@ def evaluate_custom(
         Mapping from metric name to computed score (float), clipped to
         [``SCORE_MIN``, ``SCORE_MAX``] = [-100, 100]. If `prediction` contains
         NaN or inf, every metric is scored as ``NONFINITE_SCORE`` (-100).
+        If the dataset YAML sets ``lower_is_better: true`` (error metrics),
+        scores are instead clipped to [0, ``SCORE_MAX``] = [0, 100] and a
+        NaN/inf prediction scores ``SCORE_MAX`` (100) on every metric.
 
     Raises
     ------
     ValueError
-        If `pair_id` is invalid, an unknown metric is requested, or the dataset
-        long-time evaluation type is unknown.
+        If `pair_id` is invalid, an unknown metric is requested, the dataset
+        long-time evaluation type is unknown, or (windowed pairs) the truth
+        is not 3D or the prediction shape does not match the truth windows.
     """
     config = get_config(dataset_name)
 
@@ -395,22 +547,58 @@ def evaluate_custom(
     default_metrics = pair["metrics"]
     metrics = default_metrics if metrics is None else metrics
     results = {}
+    windowed = "horizon" in pair
+    if is_lower_is_better(config):
+        score_min, score_max, nonfinite_score = (
+            LOWER_IS_BETTER_SCORE_MIN,
+            LOWER_IS_BETTER_SCORE_MAX,
+            LOWER_IS_BETTER_NONFINITE_SCORE,
+        )
+    else:
+        score_min, score_max, nonfinite_score = SCORE_MIN, SCORE_MAX, NONFINITE_SCORE
     # Check metric names and the long-time evaluation type before looking at the prediction,
     # so config errors raise even for non-finite predictions
     for metric in metrics:
         if metric not in METRICS:
             raise ValueError(f"Unknown metric: {metric}")
+        if (metric in WINDOWED_METRICS) != windowed:
+            kind = "windowed pairs (with a 'horizon')" if metric in WINDOWED_METRICS else "non-windowed pairs"
+            raise ValueError(f"Metric {metric} is only supported for {kind}; pair_id {pair_id} of {dataset_name}")
     if "long_time" in metrics:
         long_time_eval_type = config["evaluations"]["long_time"]
         if long_time_eval_type not in LONG_TIME_EVAL_TYPES:
             raise ValueError(f"Unknown dataset long time evaluation type: {long_time_eval_type}")
-    # Score diverged predictions (NaN or inf) as NONFINITE_SCORE, since the metrics cannot handle them
+    # Score diverged predictions (NaN or inf) as nonfinite_score, since the metrics cannot handle them
     nonfinite = not np.isfinite(prediction).all()
+    windowed_results: dict[str, float] = {}
+    if windowed:
+        # Cut the truth windows from the continuous series, in the one place they are cut
+        truth = np.asarray(truth)
+        prediction = np.asarray(prediction)
+        if truth.ndim != 3:
+            raise ValueError(
+                f"Truth for windowed pair_id {pair_id} must be the continuous (time, building, channel) series, "
+                f"got shape {truth.shape}"
+            )
+        params = _window_params(config, pair)
+        target_series = truth[:, :, evaluation_params["target_channel"]]
+        truth_windows = _forecast_windows(
+            target_series, params["lookback"], params["horizon"], params["stride"], "horizon"
+        )
+        if prediction.shape != truth_windows.shape:
+            raise ValueError(
+                f"Prediction shape {prediction.shape} does not match the truth windows (W, horizon, buildings) "
+                f"= {truth_windows.shape} for pair_id {pair_id} of {dataset_name}"
+            )
+        if not nonfinite:
+            windowed_results = _windowed_scores(metrics, target_series, truth_windows, prediction, params["horizon"])
     if nonfinite:
-        print(f"WARNING: prediction contains NaN or inf, scoring every metric as {NONFINITE_SCORE}")
+        print(f"WARNING: prediction contains NaN or inf, scoring every metric as {nonfinite_score}")
     for metric in metrics:
         if nonfinite:
-            results[metric] = NONFINITE_SCORE
+            results[metric] = nonfinite_score
+        elif metric in WINDOWED_METRICS:
+            results[metric] = windowed_results[metric]
         elif metric == "short_time":
             if flexible_k:
                 k_short = min(truth.shape[0], evaluation_params["k_short"])
@@ -446,7 +634,7 @@ def evaluate_custom(
         else:
             raise ValueError(f"Unknown metric: {metric}")
     # Clip so a very poor prediction cannot dominate averages across pairs
-    return {metric: float(np.clip(score, SCORE_MIN, SCORE_MAX)) for metric, score in results.items()}
+    return {metric: float(np.clip(score, score_min, score_max)) for metric, score in results.items()}
 
 
 def save_results(

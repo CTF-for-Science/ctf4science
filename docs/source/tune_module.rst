@@ -31,7 +31,7 @@ The code works by calling ``ctf4science/tune_module``, which:
 2. Sets up RayTune
 3. Runs an objective function, which takes the template configuration, populates it with the trial's selected hyperparameters
 4. Runs ``run_opt.py`` with the generated configuration file
-5. Reads in the generated ``results_{...}.yaml`` file from ``run_opt.py`` and sums all the scores
+5. Reads in the generated ``results_{...}.yaml`` file from ``run_opt.py`` and sums the scores (see `Objective and optimization mode`_)
 6. Go back to (2.) until all trials have completed
 
 Note that the configuration files all have a unique batch_id to allow for parallelization
@@ -88,4 +88,24 @@ This directory contains hyperparameter optimization configurations. An example f
 
 All "types" of hyperparameters come from the ``_create_search_space(...)`` function in ``tune_module.py``. This function takes a ``tuning_config`` file and returns a Ray Tune dictionary that is directly used in hyperparameter optimization.
 
-Note: the ``pair_id`` parameter is a list of pair_ids to run your hyperparameter optimization on. The "score" that is calculates is a sum of all evaluation metrics for all pair_ids. If you want to optimize one model over many pair_ids, make this parameter a list of those pair_ids. If you want to optimize one model per pair_id, make it a list of a single integer.
+Note: the ``pair_id`` parameter selects the pair_ids to run your hyperparameter optimization on. It can be a single integer, a list of integers, an inclusive range string such as ``"1-6"``, or ``all``. The "score" that is calculated is a sum of the evaluation metrics over all of these pair_ids (see `Objective and optimization mode`_). If you want to optimize one model over many pair_ids, make this parameter a list (or range) of those pair_ids. If you want to optimize one model per pair_id, make it a list of a single integer.
+
+Objective and optimization mode
+-------------------------------
+
+Each trial's score is the sum of the metrics that ``run_opt.py`` writes for the tuned pairs. Two optional top-level keys of the dataset YAML (``data/<dataset>/<dataset>.yaml``) control how that score is built and in which direction it is optimized:
+
+.. code-block:: yaml
+
+   lower_is_better: true   # metrics are errors: the tuner minimises
+   tuning_metric: mae      # sum only this metric over the tuned pairs
+
+``lower_is_better``
+   Sets the default optimization mode. ``ModelTuner`` takes ``mode=None`` by default (and ``--mode`` on the command line defaults to unset), which means "read it from the dataset": ``min`` if the dataset YAML sets ``lower_is_better: true``, otherwise ``max``. The existing datasets do not set the key, so they are still maximized. An explicit ``mode`` argument or ``--mode min|max`` always wins over the dataset setting.
+
+``tuning_metric``
+   When set, the score sums only this metric over the tuned pairs, one value per pair, instead of every metric of every pair. Use it when a pair's metrics measure the same thing in different ways (e.g. MAE, RMSE and MASE), where summing them would weight them arbitrarily. Every tuned pair must list ``tuning_metric`` in its ``metrics``; the tuner raises an error at start-up otherwise. Without the key, all metrics are summed.
+
+A trial that fails, produces no results, or produces results that miss a tuned pair (matched on each entry's ``pair_id``) gets the worst score a real trial can reach: each counted metric at its clipped worst value (-100 when maximizing, +100 when minimizing). The number of counted metrics is every default metric of each tuned pair, or one per tuned pair when ``tuning_metric`` is set. Failed trials therefore rank last without using infinities.
+
+The ``--metric`` option (default ``score``) is unrelated to ``tuning_metric``: it is only the name under which the summed score is reported to Ray Tune.

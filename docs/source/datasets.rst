@@ -1,7 +1,7 @@
 Datasets
 ========
 
-This document summarizes the core datasets used in the CTF for Science framework. Each dataset comprises a collection of train/test pairs, each associated with one or more evaluation metrics (E1–E12). For a detailed explanation of these metrics, see :doc:`evaluation_metrics`. For visual outputs associated with each dataset, see :doc:`visualization_module`.
+This document summarizes the core datasets used in the CTF for Science framework. Each dataset comprises a collection of train/test pairs, each associated with one or more evaluation metrics (E1–E12, or the error metrics of `buildings`_). For a detailed explanation of these metrics, see :doc:`evaluation_metrics`. For visual outputs associated with each dataset, see :doc:`visualization_module`.
 
 Dataset Summary Table
 ---------------------
@@ -63,6 +63,12 @@ Dataset Summary Table
      - 62451, 26508
      - spectral\_L2\_error
      - psd, 2d\_comparison
+   * - buildings
+     - Time series (windowed)
+     - 900 s
+     - 144 target buildings × 6 channels
+     - none (mae, rmse, mase)
+     - none
 
 ODE\_Lorenz
 -----------
@@ -490,6 +496,150 @@ Physical times are computed as ``t[i] = (start_index + i) * delta_t``.
      - X9test [400 rows]
      - [800, 1199]
      - short\_time
+
+buildings
+---------
+
+Thermal behaviour of buildings: weather, heating power and indoor temperature at 15-minute steps. Models are trained on *source* buildings and forecast the indoor temperature of 144 *target* buildings in their second year. Unlike the other datasets, every array is ``(time, building, channel)`` and a pair is scored on many short forecast windows rather than one long trajectory.
+
+* **Time step** (``delta_t``): 900 s (15 minutes); one day is 96 steps.
+* **Times**: ``get_training_timesteps`` and ``get_prediction_timesteps`` return the CSV ``time`` column: year 1 starts at 900 s and year 2 at 31,536,000 s (exactly 365 days).
+* **Buildings**: 144 targets, in a PI and an RW variant with the same building order, and the source buildings (one column per source file).
+* **Channels** (axis 2, float32): 0 diffuse solar, 1 direct solar, 2 outdoor temperature, 3 heating power, 4 indoor temperature (the forecast target), 5 ``u`` (heating power is ``u`` times a per-building constant, so covariates use ``u``).
+* **Evaluation**: ``mae``, ``rmse`` and ``mase`` on the indoor temperature, lower is better (see :doc:`evaluation_metrics`).
+* **Visualizations**: none. The plot functions expect 2D ``(T, F)`` arrays, so ``get_applicable_plots('buildings')`` returns an empty list.
+
+Files
+~~~~~
+
+Every time series is stored once, as a continuous array; the forecast windows are cut at load time.
+
+.. list-table:: buildings files
+   :header-rows: 1
+   :widths: 40 25 35
+
+   * - File
+     - Shape
+     - Content
+   * - ``train/sources.npz``
+     - (35039, S, 6)
+     - Source buildings, year 1
+   * - ``train/targets_{PI,RW}_octdec.npz``
+     - (8832, 144, 6)
+     - Target buildings, Oct–Dec of year 1 (forecasting pairs only)
+   * - ``test/targets_{PI,RW}_year2.npz``
+     - (35040, 144, 6)
+     - Target buildings, year 2: model input (lookbacks) and ground truth
+   * - ``*_noisy_weather.npz``
+     - (rows, buildings, 3)
+     - Noisy copies of the three weather channels of each file above, for the G3 pairs
+   * - ``building_ids.txt``
+     - —
+     - Tab-separated ``set``, ``column``, ``building_id``: the building of each column of ``sources``, ``targets_PI`` and ``targets_RW``
+
+``S`` is the number of source files. When a source building comes in several excitation variants, the variants share one building ID.
+
+Pairs
+~~~~~
+
+There are 12 pairs, one per task. *Generalization* pairs train on the source buildings only; *forecasting* pairs also train on the targets' own Oct–Dec data. The horizon and covariates set the difficulty: G1 forecasts one step ahead with no future inputs, G2 forecasts a day ahead with the exact future weather and ``u``, and G3 forecasts a day ahead with noisy future weather and the exact ``u``.
+
+.. list-table:: buildings pairs
+   :header-rows: 1
+   :widths: 8 16 10 30 10 10 16
+
+   * - ID
+     - Task
+     - Group
+     - Train file(s)
+     - Horizon
+     - Stride
+     - Covariates
+   * - 1 / 2
+     - Generalization
+     - G1 PI / RW
+     - sources
+     - 1
+     - 1
+     - none
+   * - 3 / 4
+     - Generalization
+     - G2 PI / RW
+     - sources
+     - 96
+     - 96
+     - exact
+   * - 5 / 6
+     - Generalization
+     - G3 PI / RW
+     - sources
+     - 96
+     - 96
+     - noisy
+   * - 7 / 8
+     - Forecasting
+     - G1 PI / RW
+     - sources, targets\_{PI,RW}\_octdec
+     - 1
+     - 1
+     - none
+   * - 9 / 10
+     - Forecasting
+     - G2 PI / RW
+     - sources, targets\_{PI,RW}\_octdec
+     - 96
+     - 96
+     - exact
+   * - 11 / 12
+     - Forecasting
+     - G3 PI / RW
+     - sources, targets\_{PI,RW}\_octdec
+     - 96
+     - 96
+     - noisy
+
+Every pair is tested on ``targets_{PI,RW}_year2.npz``. Use ``pair_id: "1-6"`` to run all generalization pairs.
+
+Forecast windows and the stride rule
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The API cuts the year-2 series into windows. Window ``i`` has:
+
+* **lookback**: rows ``[i * stride, i * stride + lookback)``, all 6 channels (``lookback`` = 96, one day);
+* **target**: the next ``horizon`` rows of indoor temperature;
+* **covariates**: the same ``horizon`` rows of channels 0, 1, 2 and 5 (G2 and G3 only). For G3 the weather channels come from the noisy file and ``u`` from the clean one; the noise is stored once per time step, so a step has the same noisy value in every window.
+
+The stride is a dataset setting, not a model setting, so every model is scored on the same windows. It is ``evaluation_params.stride`` (96: one forecast per day, starting at midnight on the test set) unless a pair sets its own ``stride``. The four G1 pairs set ``stride: 1``: with a one-step horizon and a stride of 96, every scored step would be 00:00, so they instead score a one-step forecast from every possible lookback. Only windows that end inside the series are kept, so year 2 gives 34,944 windows per building at stride 1 and 364 at stride 96.
+
+Models never cut windows themselves:
+
+.. code-block:: python
+
+   from ctf4science.data_module import load_dataset, load_forecast_windows
+   from ctf4science.eval_module import evaluate
+
+   train_data, _ = load_dataset("buildings", pair_id)
+   lookback, covariates = load_forecast_windows("buildings", pair_id)
+   #   lookback   (W, 96, 144, 6), a view into the year-2 array
+   #   covariates (W, horizon, 144, 4), or None for G1
+   prediction = model.predict(lookback, covariates)  # (W, horizon, 144)
+   results = evaluate("buildings", pair_id, prediction)
+
+``lookback`` is not copied. For the G1 pairs it is nominally ``(34944, 96, 144, 6)``, about 11.6 GB as float32 if copied in one go (for example by moving it to a GPU), so predict over ``W`` in batches.
+
+Both ``lookback`` and ``covariates`` are read-only; copy a batch before modifying it in place. Predict each window from its own lookback and covariates only, and fit nothing on these arrays: adjacent windows overlap, so another window's lookback can contain this window's answer.
+
+For hyperparameter tuning, ``load_validation_forecast_windows("buildings", pair_id, n_holdout, n_val_rows=2688, seed=0)`` returns ``train_data, lookback, covariates, truth`` without touching the test set. Generalization pairs hold out ``n_holdout`` source building IDs (all variants of a building together) and window their whole year; forecasting pairs keep all sources and hold out the last ``n_val_rows`` rows (28 days) of the targets' Oct–Dec data. ``truth`` is the continuous held-out series; pass it to ``evaluate_custom``, which cuts the truth windows itself. The same two rules apply to the validation windows. Generalization-pair validation windows start at 00:15, not midnight, because the source series start at 900 s.
+
+The test set is not hidden
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The year-2 files are both the model input (the lookbacks) and the ground truth, so ``test/`` ships with the dataset and ``buildings`` has no hidden leaderboard. This follows from storing each series once and allowing any stride. Models should read the test set only through ``load_forecast_windows`` and must not train on it.
+
+Download
+~~~~~~~~
+
+``data/`` is not tracked in git. Download ``buildings.tar.gz`` from the `OSF page <https://osf.io/6rzhm/overview>`_, extract it with ``tar -xzvf buildings.tar.gz`` and place the ``buildings/`` directory in the top-level ``data/`` directory. The tarball is built from the authors' CSV files by ``scripts/convert_buildings.py``.
 
 ----
 

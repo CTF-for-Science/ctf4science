@@ -541,18 +541,13 @@ def get_applicable_plots(dataset_name: str) -> list[str]:
     Returns
     -------
     list of str
-        Applicable plot types (e.g. ``['trajectories', 'histograms']``).
-
-    Raises
-    ------
-    ValueError
-        If no visualizations are defined in the dataset configuration.
+        Applicable plot types (e.g. ``['trajectories', 'histograms']``), or an
+        empty list if the dataset configuration defines no visualizations (as
+        for ``buildings``, whose 3D arrays the plot functions do not support).
     """
     dataset_config = get_config(dataset_name)
 
-    applicable_plots = dataset_config.get("visualizations", [])
-    if not applicable_plots:
-        raise ValueError(f"No visualizations defined for dataset: {dataset_name}")
+    applicable_plots = dataset_config.get("visualizations") or []
 
     return applicable_plots
 
@@ -618,6 +613,26 @@ def get_config(dataset_name: str) -> dict[str, Any]:
         config = yaml.safe_load(f)
 
     return config
+
+
+def is_lower_is_better(dataset_config: dict[str, Any]) -> bool:
+    r"""Return whether a dataset's metrics are errors (lower is better).
+
+    True only if the dataset YAML sets ``lower_is_better: true`` (the YAML
+    boolean, not merely a truthy value). Read by `evaluate_custom` (score
+    clipping) and the tuner (default mode).
+
+    Parameters
+    ----------
+    dataset_config : dict
+        Parsed dataset YAML (as returned by `get_config`).
+
+    Returns
+    -------
+    bool
+        ``True`` if ``lower_is_better`` is ``True``, otherwise ``False``.
+    """
+    return dataset_config.get("lower_is_better", False) is True
 
 
 def get_validation_training_timesteps(dataset_name, pair_id, train_split=0.8):
@@ -852,3 +867,506 @@ def load_validation_dataset(dataset_name, pair_id, train_split=0.8, transpose=Fa
         return [td.T for td in train_data], val_data.T, (init_data.T if init_data is not None else None)
 
     return train_data, val_data, init_data
+
+
+# ---------------------------------------------------------------------------
+# Windowed forecasting datasets (``buildings``)
+# ---------------------------------------------------------------------------
+
+# Values the ``covariates`` key of a windowed pair may take (absent means "none")
+COVARIATE_MODES = ("none", "exact", "noisy")
+
+# Channels of the continuous (time, building, channel) arrays that a noisy-weather file replaces,
+# in the order the noisy-weather file stores them. Every other covariate channel (``u``) always
+# comes from the clean file.
+NOISY_WEATHER_CHANNELS = (0, 1, 2)
+
+# Suffix appended to the stem of a train file to name its noisy-weather file (used by validation)
+NOISY_WEATHER_SUFFIX = "_noisy_weather"
+
+# Name of the file in the dataset directory that lists the building ID of every column of each set
+BUILDING_IDS_FILE = "building_ids.txt"
+BUILDING_IDS_HEADER = ("set", "column", "building_id")
+
+
+def _window_starts(n_rows: int, lookback: int, horizon: int, stride: int) -> np.ndarray:
+    r"""Return the first row of every forecast window that fits in a series of `n_rows` rows.
+
+    Window ``i`` starts at row ``i * stride``. Its lookback is rows
+    ``[i * stride, i * stride + lookback)`` and its horizon is the next
+    `horizon` rows. Only windows whose horizon ends inside the series are kept.
+
+    Parameters
+    ----------
+    n_rows : int
+        Number of rows (time steps) in the continuous series.
+    lookback : int
+        Number of rows a model sees before each forecast.
+    horizon : int
+        Number of rows forecast after each lookback.
+    stride : int
+        Number of rows between consecutive window starts.
+
+    Returns
+    -------
+    ndarray
+        1D integer array of window start rows, ``[0, stride, 2 * stride, ...]``.
+        Empty if the series is shorter than ``lookback + horizon``.
+
+    Raises
+    ------
+    ValueError
+        If `lookback`, `horizon` or `stride` is not a positive integer.
+    """
+    for name, value in (("lookback", lookback), ("horizon", horizon), ("stride", stride)):
+        if not isinstance(value, (int, np.integer)) or isinstance(value, bool) or value < 1:
+            raise ValueError(f"{name} must be a positive integer, got {value!r}")
+    span = lookback + horizon
+    n_windows = 0 if n_rows < span else (n_rows - span) // stride + 1
+    return np.arange(n_windows) * stride
+
+
+def _forecast_windows(series: np.ndarray, lookback: int, horizon: int, stride: int, part: str) -> np.ndarray:
+    r"""Cut a continuous series into forecast windows, as a view without copying.
+
+    This is the one place where forecast windows are cut: the forecast loaders
+    and `ctf4science.eval_module.evaluate_custom` all call it, so lookbacks,
+    covariates and truth always line up. Window start rows come from
+    `_window_starts`.
+
+    Parameters
+    ----------
+    series : ndarray
+        Continuous series with time on axis 0, e.g. ``(T, buildings, channels)``
+        or ``(T, buildings)``.
+    lookback : int
+        Number of lookback rows per window.
+    horizon : int
+        Number of forecast rows per window.
+    stride : int
+        Number of rows between consecutive window starts.
+    part : {'lookback', 'horizon'}
+        Which rows of each window to return: the `lookback` rows, or the
+        `horizon` rows that follow them.
+
+    Returns
+    -------
+    ndarray
+        Read-only view of shape ``(W, length, *series.shape[1:])``, where ``W``
+        is the number of windows and ``length`` is `lookback` or `horizon`.
+
+    Raises
+    ------
+    ValueError
+        If `part` is not ``'lookback'`` or ``'horizon'``, or a window
+        parameter is not a positive integer.
+    """
+    if part == "lookback":
+        offset, length = 0, lookback
+    elif part == "horizon":
+        offset, length = lookback, horizon
+    else:
+        raise ValueError(f"part must be 'lookback' or 'horizon', got {part!r}")
+
+    n_windows = len(_window_starts(series.shape[0], lookback, horizon, stride))
+    if n_windows == 0:
+        return np.empty((0, length, *series.shape[1:]), dtype=series.dtype)
+
+    # Rows covered by this part of all windows; sliding_window_view puts the window axis last
+    segment = series[offset : offset + (n_windows - 1) * stride + length]
+    windows = np.lib.stride_tricks.sliding_window_view(segment, length, axis=0)[::stride]
+    return np.moveaxis(windows, -1, 1)
+
+
+def _get_pair(config: dict[str, Any], dataset_name: str, pair_id: int) -> dict[str, Any]:
+    r"""Return the config entry of a pair, raising ``ValueError`` if it does not exist."""
+    pair = next((p for p in config["pairs"] if p["id"] == pair_id), None)
+    if pair is None:
+        raise ValueError(f"Provided pair_id {pair_id} does not exist in {dataset_name} config")
+    return pair
+
+
+def _get_windowed_pair(config: dict[str, Any], dataset_name: str, pair_id: int) -> dict[str, Any]:
+    r"""Return the config entry of a windowed forecasting pair (one with a ``horizon`` key)."""
+    pair = _get_pair(config, dataset_name, pair_id)
+    if "horizon" not in pair:
+        raise ValueError(f"Provided pair_id {pair_id} in {dataset_name} config is not a windowed pair (no 'horizon')")
+    return pair
+
+
+def is_windowed_pair(dataset_name: str, pair_id: int) -> bool:
+    r"""Return whether a pair is a windowed forecasting pair (it has a ``horizon`` key).
+
+    Windowed pairs (e.g. buildings) are forecast with `load_forecast_windows`
+    and scored on windows; all other pairs use `load_dataset` as before.
+
+    Parameters
+    ----------
+    dataset_name : str
+        Name of the dataset (e.g. ``'buildings'``).
+    pair_id : int
+        ID of the train-test pair.
+
+    Returns
+    -------
+    bool
+        ``True`` if the pair defines ``horizon``, otherwise ``False``.
+
+    Raises
+    ------
+    ValueError
+        If `pair_id` does not exist in the dataset config.
+    """
+    return "horizon" in _get_pair(get_config(dataset_name), dataset_name, pair_id)
+
+
+def get_window_params(dataset_name: str, pair_id: int) -> dict[str, int]:
+    r"""Return the forecast window parameters of a windowed pair.
+
+    The ``lookback`` comes from ``evaluation_params``; the ``stride`` comes
+    from the pair's own ``stride`` key if it has one, otherwise from
+    ``evaluation_params``; the ``horizon`` comes from the pair.
+
+    Parameters
+    ----------
+    dataset_name : str
+        Name of the dataset (e.g. ``'buildings'``).
+    pair_id : int
+        ID of the train-test pair. The pair must define ``horizon``.
+
+    Returns
+    -------
+    dict
+        ``{'lookback': int, 'horizon': int, 'stride': int}``.
+
+    Raises
+    ------
+    ValueError
+        If `pair_id` does not exist or the pair has no ``horizon``.
+    """
+    config = get_config(dataset_name)
+    return _window_params(config, _get_windowed_pair(config, dataset_name, pair_id))
+
+
+def _window_params(config: dict[str, Any], pair: dict[str, Any]) -> dict[str, int]:
+    r"""Resolve lookback, horizon and stride (with the per-pair stride override) for a pair."""
+    evaluation_params = config["evaluation_params"]
+    return {
+        "lookback": evaluation_params["lookback"],
+        "horizon": pair["horizon"],
+        "stride": pair.get("stride", evaluation_params["stride"]),
+    }
+
+
+def _covariate_mode(pair: dict[str, Any], dataset_name: str) -> str:
+    r"""Return the pair's ``covariates`` setting, ``'none'`` if absent."""
+    mode = pair.get("covariates", "none")
+    if mode not in COVARIATE_MODES:
+        raise ValueError(
+            f"Unknown covariates setting {mode!r} for pair_id {pair['id']} in {dataset_name} config; "
+            f"expected one of {COVARIATE_MODES}"
+        )
+    return mode
+
+
+def _covariate_series(clean: np.ndarray, noisy_weather: np.ndarray | None, covariate_channels: list[int]) -> np.ndarray:
+    r"""Assemble the continuous covariate series ``(T, buildings, len(covariate_channels))``.
+
+    Weather channels (`NOISY_WEATHER_CHANNELS`) are taken from `noisy_weather`
+    when it is given; every other channel (``u``) is taken from `clean`.
+    """
+    if noisy_weather is None:
+        return clean[..., covariate_channels]
+    if noisy_weather.shape[:-1] != clean.shape[:-1] or noisy_weather.shape[-1] != len(NOISY_WEATHER_CHANNELS):
+        raise ValueError(
+            f"Noisy weather shape {noisy_weather.shape} does not match clean shape {clean.shape} "
+            f"with {len(NOISY_WEATHER_CHANNELS)} weather channels"
+        )
+    columns = [
+        noisy_weather[..., NOISY_WEATHER_CHANNELS.index(c)] if c in NOISY_WEATHER_CHANNELS else clean[..., c]
+        for c in covariate_channels
+    ]
+    return np.stack(columns, axis=-1)
+
+
+def _window_inputs(
+    config: dict[str, Any],
+    pair: dict[str, Any],
+    dataset_name: str,
+    series: np.ndarray,
+    noisy_weather: np.ndarray | None,
+) -> tuple[np.ndarray, np.ndarray | None]:
+    r"""Cut the lookback windows and (if the pair uses them) covariate windows from a continuous series."""
+    params = _window_params(config, pair)
+    lookback = _forecast_windows(series, params["lookback"], params["horizon"], params["stride"], "lookback")
+    mode = _covariate_mode(pair, dataset_name)
+    if mode == "none":
+        return lookback, None
+    covariate_channels = config["evaluation_params"]["covariate_channels"]
+    covariates = _covariate_series(series, noisy_weather if mode == "noisy" else None, covariate_channels)
+    covariates = _forecast_windows(covariates, params["lookback"], params["horizon"], params["stride"], "horizon")
+    return lookback, covariates
+
+
+def load_forecast_windows(dataset_name: str, pair_id: int) -> tuple[np.ndarray, np.ndarray | None]:
+    r"""Load the test-set forecast windows a model predicts from, for a windowed pair.
+
+    Cuts the pair's continuous test series ``(T, buildings, channels)`` into
+    windows with the dataset's ``lookback``, the pair's ``horizon`` and the
+    pair's ``stride`` (or the dataset default). Window ``i`` has lookback rows
+    ``[i * stride, i * stride + lookback)``; the forecast covers the next
+    ``horizon`` rows. Models never cut windows themselves, so every model is
+    scored on the same windows by `ctf4science.eval_module.evaluate`.
+
+    Both returned window arrays (lookback and covariates) are read-only views;
+    copy a batch before modifying it in place. Predict each window from its
+    own lookback and covariates only, and fit nothing on these arrays:
+    adjacent windows overlap, so another window's lookback can contain this
+    window's answer.
+
+    Parameters
+    ----------
+    dataset_name : str
+        Name of the dataset (e.g. ``'buildings'``).
+    pair_id : int
+        ID of the train-test pair. The pair must define ``horizon``.
+
+    Returns
+    -------
+    lookback : ndarray
+        Read-only view into the test series, shape
+        ``(W, lookback, buildings, channels)``, all channels. It is not
+        copied, so predict over ``W`` in batches: copying it in one go can
+        take many GB.
+    covariates : ndarray or None
+        Read-only view of the known future inputs over each forecast horizon,
+        shape ``(W, horizon, buildings, len(covariate_channels))``, in the order of
+        ``evaluation_params.covariate_channels``. None if the pair's
+        ``covariates`` is ``none`` (or absent). For ``noisy`` the weather
+        channels come from the pair's ``noisy_weather`` file in ``test/`` and
+        the other channels from the clean test series.
+
+    Raises
+    ------
+    ValueError
+        If `pair_id` does not exist, the pair has no ``horizon``, its
+        ``covariates`` setting is unknown, or a ``noisy`` pair has no
+        ``noisy_weather`` file.
+    FileNotFoundError
+        If a data file is missing.
+    """
+    config = get_config(dataset_name)
+    pair = _get_windowed_pair(config, dataset_name, pair_id)
+
+    series = _load_test_data(dataset_name, pair_id)
+    noisy_weather = None
+    if _covariate_mode(pair, dataset_name) == "noisy":
+        if "noisy_weather" not in pair:
+            raise ValueError(
+                f"Provided pair_id {pair_id} in {dataset_name} config has noisy covariates but no 'noisy_weather' file"
+            )
+        noisy_weather = _load_data_file(top_dir / "data" / dataset_name / "test" / pair["noisy_weather"])
+
+    return _window_inputs(config, pair, dataset_name, series, noisy_weather)
+
+
+def load_building_ids(dataset_name: str) -> dict[str, list[str]]:
+    r"""Load the building ID of every column of each set from ``building_ids.txt``.
+
+    The file is tab-separated with the header line ``set<TAB>column<TAB>building_id``
+    and one row per column of each set. ``set`` names the arrays whose
+    building axis (axis 1) the row describes: ``sources`` for
+    ``train/sources.npz``, and ``targets_PI`` / ``targets_RW`` for the target
+    files. ``column`` is the index on axis 1 and ``building_id`` is the
+    building's parameter string. Rows of one set that share a ``building_id``
+    are variants of one building (e.g. the excitation variants of a source
+    building).
+
+    Parameters
+    ----------
+    dataset_name : str
+        Name of the dataset (e.g. ``'buildings'``).
+
+    Returns
+    -------
+    dict
+        Mapping from set name to its building IDs, ordered by column.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the dataset has no ``building_ids.txt``.
+    ValueError
+        If the header is wrong, a row is malformed, two rows give the same set
+        and column, or a set's columns are not exactly ``0, 1, ..., n - 1``.
+    """
+    file_path = top_dir / "data" / dataset_name / BUILDING_IDS_FILE
+    if not file_path.exists():
+        raise FileNotFoundError(f"Building ID file not found: {file_path}")
+
+    with open(file_path, "r") as f:
+        lines = [line.rstrip("\r\n") for line in f if line.strip()]
+    if not lines or lines[0].split("\t") != list(BUILDING_IDS_HEADER):
+        raise ValueError(f"{file_path} must start with the header {chr(9).join(BUILDING_IDS_HEADER)!r}")
+
+    columns: dict[str, dict[int, str]] = {}
+    for line_number, line in enumerate(lines[1:], start=2):
+        fields = line.split("\t")
+        if len(fields) != len(BUILDING_IDS_HEADER):
+            raise ValueError(f"{file_path} line {line_number}: expected 3 tab-separated fields, got {line!r}")
+        set_name, column, building_id = fields
+        by_column = columns.setdefault(set_name, {})
+        if int(column) in by_column:
+            raise ValueError(f"{file_path} line {line_number}: set {set_name!r} lists column {column} twice")
+        by_column[int(column)] = building_id
+
+    building_ids: dict[str, list[str]] = {}
+    for set_name, by_column in columns.items():
+        if sorted(by_column) != list(range(len(by_column))):
+            raise ValueError(f"{file_path}: columns of set {set_name!r} are not 0..{len(by_column) - 1}")
+        building_ids[set_name] = [by_column[i] for i in range(len(by_column))]
+    return building_ids
+
+
+def _noisy_weather_name(file_name: str) -> str:
+    r"""Return the name of a train file's noisy-weather file, e.g. ``sources_noisy_weather.npz``."""
+    path = Path(file_name)
+    return f"{path.stem}{NOISY_WEATHER_SUFFIX}{path.suffix}"
+
+
+def load_validation_forecast_windows(
+    dataset_name: str, pair_id: int, n_holdout: int, n_val_rows: int = 2688, seed: int = 0
+) -> tuple[list[np.ndarray], np.ndarray, np.ndarray | None, np.ndarray]:
+    r"""Split a windowed pair's training data into a training set and validation windows.
+
+    Used for hyperparameter tuning, where the test set must not be used. The
+    split mirrors the pair's task. A pair is a **forecasting** pair if its
+    ``train`` list has a second file (the target buildings' own earlier data);
+    otherwise it is a **generalization** pair.
+
+    * **Generalization** (one train file, the source buildings): `n_holdout`
+      building IDs are drawn by a shuffle with `seed` and held out with all
+      their columns (every variant of a held-out building leaves training
+      together, see `load_building_ids`). The held-out buildings' whole
+      series is the validation series. `n_val_rows` is ignored.
+    * **Forecasting** (two train files: sources, then target data): all
+      sources stay in training. The target file is split in time: training
+      gets its first ``T - n_val_rows`` rows and the last `n_val_rows` rows
+      are the validation series for all target buildings. `n_holdout` is
+      ignored.
+
+    The validation series is windowed exactly as the test series is by
+    `load_forecast_windows`. For pairs with ``covariates: noisy`` the weather
+    covariates come from the train file's noisy-weather file
+    (``<stem>_noisy_weather.npz`` in ``train/``).
+
+    As for the test set, both window arrays (lookback and covariates) are
+    read-only views; copy a batch before modifying it in place. Predict each
+    window from its own lookback and covariates only, and fit nothing on
+    these arrays or on `truth`: adjacent windows overlap, so another window's
+    lookback can contain this window's answer.
+
+    Parameters
+    ----------
+    dataset_name : str
+        Name of the dataset (e.g. ``'buildings'``).
+    pair_id : int
+        ID of the train-test pair. The pair must define ``horizon``.
+    n_holdout : int
+        Number of source building IDs to hold out (generalization pairs).
+    n_val_rows : int, optional
+        Number of trailing target rows to hold out (forecasting pairs).
+        Default is 2688 (28 days of 15-minute steps).
+    seed : int, optional
+        Seed of the building shuffle (generalization pairs). Default is 0.
+
+    Returns
+    -------
+    train_data : list of ndarray
+        Training arrays, in the order of the pair's ``train`` list, with the
+        validation part removed.
+    lookback : ndarray
+        Read-only lookback windows of the validation series, shape
+        ``(W, lookback, buildings, channels)``.
+    covariates : ndarray or None
+        Read-only covariate windows, shape ``(W, horizon, buildings, n_covariates)``,
+        or None if the pair uses no covariates.
+    truth : ndarray
+        The continuous validation series ``(T_val, buildings, channels)``,
+        not windowed. Pass it to `ctf4science.eval_module.evaluate_custom`,
+        which cuts the truth windows itself.
+
+    Raises
+    ------
+    ValueError
+        If the pair is not windowed, has more than two train files,
+        `n_holdout` or `n_val_rows` is not an integer (e.g. ``45.0`` from a
+        YAML file), or they leave an empty training or validation set.
+    FileNotFoundError
+        If a data file or ``building_ids.txt`` is missing.
+    """
+    for name, value in (("n_holdout", n_holdout), ("n_val_rows", n_val_rows)):
+        if not isinstance(value, (int, np.integer)) or isinstance(value, bool):
+            # ValueError, as for the other bad window and split parameters
+            raise ValueError(f"{name} must be an integer, got {value!r} ({type(value).__name__})")  # noqa: TRY004
+    config = get_config(dataset_name)
+    pair = _get_windowed_pair(config, dataset_name, pair_id)
+    train_names = pair.get("train", [])
+    if len(train_names) not in (1, 2):
+        raise ValueError(
+            f"Provided pair_id {pair_id} in {dataset_name} config must have one train file (generalization) "
+            f"or two (forecasting), got {len(train_names)}"
+        )
+    train_dir = top_dir / "data" / dataset_name / "train"
+    noisy = _covariate_mode(pair, dataset_name) == "noisy"
+    params = _window_params(config, pair)
+
+    sources = _load_data_file(train_dir / train_names[0])
+
+    if len(train_names) == 1:
+        # Generalization: hold out whole source buildings (all their variants) by building ID
+        set_name = Path(train_names[0]).stem
+        ids = load_building_ids(dataset_name).get(set_name)
+        if ids is None:
+            raise ValueError(f"No rows for set {set_name!r} in {BUILDING_IDS_FILE} of {dataset_name}")
+        if len(ids) != sources.shape[1]:
+            raise ValueError(
+                f"{BUILDING_IDS_FILE} lists {len(ids)} IDs for {set_name}, but {train_names[0]} has "
+                f"{sources.shape[1]} buildings"
+            )
+        unique_ids = list(dict.fromkeys(ids))
+        if not 1 <= n_holdout < len(unique_ids):
+            raise ValueError(
+                f"n_holdout must be at least 1 and below the {len(unique_ids)} source building IDs, got {n_holdout}"
+            )
+        shuffled = np.random.default_rng(seed).permutation(len(unique_ids))
+        held_out = {unique_ids[i] for i in shuffled[:n_holdout]}
+        val_cols = [i for i, building_id in enumerate(ids) if building_id in held_out]
+        train_cols = [i for i, building_id in enumerate(ids) if building_id not in held_out]
+
+        train_data = [sources[:, train_cols]]
+        truth = sources[:, val_cols]
+        noisy_weather = None
+        if noisy:
+            noisy_weather = _load_data_file(train_dir / _noisy_weather_name(train_names[0]))[:, val_cols]
+    else:
+        # Forecasting: keep all sources, split the target data in time
+        targets = _load_data_file(train_dir / train_names[1])
+        n_rows = targets.shape[0]
+        if not 1 <= n_val_rows < n_rows:
+            raise ValueError(f"n_val_rows must be in [1, {n_rows - 1}], got {n_val_rows}")
+        split = n_rows - n_val_rows
+        train_data = [sources, targets[:split]]
+        truth = targets[split:]
+        noisy_weather = None
+        if noisy:
+            noisy_weather = _load_data_file(train_dir / _noisy_weather_name(train_names[1]))[split:]
+
+    if len(_window_starts(truth.shape[0], params["lookback"], params["horizon"], params["stride"])) == 0:
+        raise ValueError(
+            f"Validation series of {truth.shape[0]} rows is shorter than lookback + horizon "
+            f"({params['lookback']} + {params['horizon']})"
+        )
+
+    lookback, covariates = _window_inputs(config, pair, dataset_name, truth, noisy_weather)
+    return train_data, lookback, covariates, truth

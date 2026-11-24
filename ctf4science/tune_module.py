@@ -18,11 +18,95 @@ import yaml
 from ray import tune
 from ray.tune.schedulers import ASHAScheduler
 
-from ctf4science.data_module import get_config
+from ctf4science.data_module import get_config, is_lower_is_better
 from ctf4science.eval_module import SCORE_MIN
 from ctf4science.performance_module import PerformanceMonitor
 
 top_dir = Path(__file__).parent.parent
+
+
+def _build_parser(description: str) -> argparse.ArgumentParser:
+    r"""Build the argument parser of `ModelTuner.run_from_cli`.
+
+    Parameters
+    ----------
+    description : str
+        Description for the argument parser.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        Parser for the tuning CLI. ``--mode`` defaults to ``None``, so the
+        mode is read from the dataset YAML unless given.
+    """
+    parser = argparse.ArgumentParser(description=description)
+
+    # Basic arguments
+    parser.add_argument("--config-path", help="Path to the model's config file")
+    parser.add_argument(
+        "--model-name",
+        help="Specific model to tune (optional, will be inferred from config file orcurrent directory if not provided)",
+    )
+    parser.add_argument("--ray-results-dir", help="Directory for Ray temporary results (default: ~/ray_results)")
+
+    # Tuning parameters
+    tuning_group = parser.add_argument_group("Tuning Parameters")
+    tuning_group.add_argument(
+        "--time-budget-hours",
+        type=float,
+        default=24.0,
+        help="Maximum time budget for tuning in hours (default: 24.0)",
+    )
+    tuning_group.add_argument("--metric", default="score", help="Metric to optimize (default: score)")
+    tuning_group.add_argument(
+        "--mode",
+        choices=["min", "max"],
+        default=None,
+        help=(
+            "Optimization mode: 'min' to minimize or 'max' to maximize the metric "
+            "(default: read from the dataset YAML, 'min' if it sets lower_is_better: true, else 'max')"
+        ),
+    )
+    tuning_group.add_argument(
+        "--gpus-per-trial",
+        type=int,
+        default=0,
+        help="Number of GPUs to use per trial (default: 0, meaning use all available GPUs)",
+    )
+
+    # Performance monitoring arguments
+    performance_group = parser.add_argument_group("Performance Monitoring (optional)")
+    performance_group.add_argument(
+        "--enable-performance-monitoring",
+        action="store_true",
+        help="Enable performance monitoring (average time per run)",
+    )
+    performance_group.add_argument(
+        "--performance-output-dir",
+        help="Directory to save performance results (default: results/performance_results)",
+    )
+
+    # ASHA scheduler arguments
+    asha_group = parser.add_argument_group("ASHA Scheduler (optional)")
+    asha_group.add_argument("--use-asha", action="store_true", help="Use ASHA scheduler for early stopping")
+    asha_group.add_argument(
+        "--asha-max-t", type=int, default=100, help="Maximum number of training iterations for ASHA (default: 100)"
+    )
+    asha_group.add_argument(
+        "--asha-grace-period",
+        type=int,
+        default=10,
+        help="Minimum number of iterations before stopping for ASHA (default: 10)",
+    )
+    asha_group.add_argument(
+        "--asha-reduction-factor",
+        type=int,
+        default=3,
+        help="Factor to reduce the number of trials for ASHA (default: 3)",
+    )
+    asha_group.add_argument("--asha-brackets", type=int, default=1, help="Number of brackets for ASHA (default: 1)")
+
+    return parser
 
 
 class ModelTuner:
@@ -42,7 +126,9 @@ class ModelTuner:
     metric : str, optional
         Metric to optimize. Default is ``"score"``.
     mode : str, optional
-        Optimization mode ``"min"`` or ``"max"``. Default is ``"max"``.
+        Optimization mode ``"min"`` or ``"max"``. Default is ``None``, which
+        reads it from the dataset YAML: ``"min"`` if it sets
+        ``lower_is_better: true``, otherwise ``"max"``. An explicit value wins.
     ignore_reinit_error : bool, optional
         Whether to ignore Ray reinit errors (dev only). Default is ``False``.
     time_budget_hours : float, optional
@@ -124,27 +210,50 @@ class ModelTuner:
     **_objective(self, config):**
 
     - Objective function for Ray Tune: generate config, run model via ``run_opt_main``, sum results.
+      Returns ``failure_score`` if the run fails or its results miss a tuned pair.
     - Parameters:
         - config : dict. Trial hyperparameter configuration.
     - Returns:
         - Dict[str, float]. Dictionary with the optimization metric (e.g. score).
 
+    **_resolve_mode(mode, dataset_config):** (static)
+
+    - Resolve the optimization mode: an explicit ``mode`` wins; ``None`` means ``"min"`` if the
+      dataset YAML sets ``lower_is_better: true``, otherwise ``"max"``.
+    - Parameters:
+        - mode : str or None. Explicit mode (``"min"``/``"max"``) or ``None``.
+        - dataset_config : dict. Parsed dataset YAML (from ``get_config``).
+    - Returns:
+        - str. ``"min"`` or ``"max"``.
+
     **_parse_pair_ids(dataset_config):** (static)
 
-    - Parse pair_id from dataset config (int, list of int, or ``'all'``).
+    - Parse pair_id from dataset config (int, list of int, range string such as ``"1-6"``, or ``'all'``).
     - Parameters:
         - dataset_config : dict. The ``dataset`` section from the config file.
     - Returns:
         - list of int or None. Pair IDs to optimize for, or None for all pairs.
-    - Raises ``ValueError`` if pair_id is not int, list of ints, or ``'all'``.
+    - Raises ``ValueError`` if pair_id is not int, list of ints, a range string, or ``'all'``.
+
+    **_failure_score(self):**
+
+    - Score given to a failed trial: the worst sum a clipped trial can reach. Counts every default
+      metric of each tuned pair, or one metric per pair when the dataset YAML sets ``tuning_metric``.
+    - Returns:
+        - float. ``SCORE_MIN * n`` for ``mode='max'``, ``-SCORE_MIN * n`` for ``mode='min'``.
+    - Raises ``ValueError`` if no tuned pair exists in the dataset, or if a tuned pair does not list
+      ``tuning_metric`` among its metrics.
 
     **_sum_results(self, results):**
 
-    - Sum metric values from the results dictionary (all pairs in ``results['pairs']``).
+    - Sum metric values from the results dictionary (all pairs in ``results['pairs']``). When the dataset
+      YAML sets ``tuning_metric``, only that metric is summed.
     - Parameters:
         - results : dict. Evaluation results from run_opt (pairs with metrics).
     - Returns:
-        - float. Sum of all metric values.
+        - float. Sum of the metric values.
+    - Raises ``ValueError`` if the results do not cover every tuned pair (the trial then gets
+      ``failure_score``), so a run that skips a pair cannot get a better sum.
 
     **_create_search_space(self, tuning_config):**
 
@@ -178,7 +287,7 @@ class ModelTuner:
         model_name: str | None = None,
         save_final_config: bool = True,
         metric: str = "score",
-        mode: str = "max",
+        mode: str | None = None,
         ignore_reinit_error: bool = False,
         time_budget_hours: float = 24.0,  # Default time budget of 24 hours
         use_asha: bool = False,  # Whether to use ASHA scheduler
@@ -220,9 +329,16 @@ class ModelTuner:
         # Parse and store pair_ids for objective function filtering
         self.pair_ids = self._parse_pair_ids(self.hp_config["dataset"])
 
+        # Dataset YAML: source of the default mode and of tuning_metric
+        self.dataset_config = get_config(self.hp_config["dataset"]["name"])
+        self.tuning_metric = self.dataset_config.get("tuning_metric")
+
         self.save_final_config = save_final_config
         self.metric = metric
-        self.mode = mode
+        self.mode = self._resolve_mode(mode, self.dataset_config)
+        print(f"Optimization mode: {self.mode}" + (" (from dataset)" if mode is None else ""))
+        if self.tuning_metric is not None:
+            print(f"Tuning metric: {self.tuning_metric} (from dataset)")
         self.failure_score = self._failure_score()
         self.ignore_reinit_error = ignore_reinit_error
         self.time_budget_hours = time_budget_hours
@@ -458,7 +574,8 @@ class ModelTuner:
         Called by Ray Tune for each trial. Generates a config with the trial's
         hyperparameters, runs the model via `run_opt_main`, loads results from
         the run's YAML, and returns a dict with the optimization metric (e.g. score).
-        On failure returns ``self.failure_score`` (see `_failure_score`).
+        On failure, or when the results do not cover every tuned pair, returns
+        ``self.failure_score`` (see `_failure_score`).
 
         Parameters
         ----------
@@ -518,11 +635,36 @@ class ModelTuner:
         return {self.metric: score}
 
     @staticmethod
+    def _resolve_mode(mode: str | None, dataset_config: dict[str, Any]) -> str:
+        r"""Resolve the optimization mode.
+
+        An explicit `mode` wins. ``None`` means "read it from the dataset":
+        ``"min"`` if the dataset YAML sets ``lower_is_better: true`` (e.g. error
+        metrics such as MAE), otherwise ``"max"``.
+
+        Parameters
+        ----------
+        mode : str or None
+            Explicit mode (``"min"`` or ``"max"``), or ``None`` to use the dataset.
+        dataset_config : dict
+            Parsed dataset YAML (as returned by `get_config`).
+
+        Returns
+        -------
+        str
+            ``"min"`` or ``"max"``.
+        """
+        if mode is not None:
+            return mode
+        return "min" if is_lower_is_better(dataset_config) else "max"
+
+    @staticmethod
     def _parse_pair_ids(dataset_config: dict[str, Any]) -> list[int] | None:
         r"""Parse pair_id from the dataset section of the config.
 
-        Accepts a single int, a list of ints, or ``'all'``. Returns ``None``
-        for ``'all'`` to mean all pairs.
+        Accepts a single int, a list of ints, an inclusive range string such as
+        ``"1-6"`` (as in `data_module.parse_pair_ids`), or ``'all'``. Returns
+        ``None`` for ``'all'`` to mean all pairs.
 
         Parameters
         ----------
@@ -537,7 +679,7 @@ class ModelTuner:
         Raises
         ------
         ValueError
-            If `pair_id` is not an int, list of ints, or ``'all'``.
+            If `pair_id` is not an int, list of ints, a range string, or ``'all'``.
         """
         pair_id_config = dataset_config.get("pair_id", "all")
 
@@ -545,23 +687,35 @@ class ModelTuner:
             return None
         elif isinstance(pair_id_config, int):
             return [pair_id_config]
+        elif isinstance(pair_id_config, str) and "-" in pair_id_config:
+            try:
+                start, end = map(int, pair_id_config.split("-"))
+            except ValueError:
+                raise ValueError(f"Invalid range format in pair_id: {pair_id_config}") from None
+            return list(range(start, end + 1))
         elif isinstance(pair_id_config, list):
             # Validate that all elements are integers
             if not all(isinstance(item, int) for item in pair_id_config):
                 raise ValueError(f"Invalid pair_id: {pair_id_config}. All elements must be integers.")
             return pair_id_config
         else:
-            raise ValueError(f"Invalid pair_id configuration: {pair_id_config}. Expected int, list of ints, or 'all'")
+            raise ValueError(
+                f"Invalid pair_id configuration: {pair_id_config}. "
+                "Expected int, list of ints, range string (e.g. '1-6'), or 'all'"
+            )
 
     def _failure_score(self) -> float:
         r"""Return the score given to a trial that fails or produces no results.
 
-        The objective is the sum of every metric over the tuned pairs, and each
-        metric is clipped to [-100, 100] by `evaluate_custom`. A failed trial
-        therefore scores as if every metric got ``SCORE_MIN`` (-100), which is
-        the worst sum a real trial can reach, so failures rank last without
-        using ``-inf``. The metrics counted are each tuned pair's default
-        ``metrics`` from the dataset YAML.
+        The objective is the sum of the metrics over the tuned pairs (see
+        `_sum_results`), and `evaluate_custom` clips each metric to a bounded
+        range ([-100, 100], or [0, 100] for ``lower_is_better`` datasets). A
+        failed trial therefore scores as if every counted metric got its worst
+        value (``SCORE_MIN`` = -100 for ``mode='max'``, +100 for ``mode='min'``),
+        which is the worst sum a real trial can reach, so failures rank last
+        without using infinities. The metrics counted are each tuned pair's
+        default ``metrics`` from the dataset YAML, or one metric per tuned pair
+        when the dataset YAML sets ``tuning_metric``.
 
         Returns
         -------
@@ -572,38 +726,77 @@ class ModelTuner:
         Raises
         ------
         ValueError
-            If none of the tuned pair IDs exist in the dataset config.
+            If none of the tuned pair IDs exist in the dataset config, or if
+            ``tuning_metric`` is set and a tuned pair does not list it in its
+            ``metrics``.
         """
         dataset_name = self.hp_config["dataset"]["name"]
-        pairs = [p for p in get_config(dataset_name)["pairs"] if self.pair_ids is None or p["id"] in self.pair_ids]
+        pairs = self._tuned_pairs()
         if not pairs:
             raise ValueError(f"None of the pair IDs {self.pair_ids} exist in the {dataset_name} config")
-        worst = SCORE_MIN * sum(len(p["metrics"]) for p in pairs)
+        if self.tuning_metric is None:
+            num_metrics = sum(len(p["metrics"]) for p in pairs)
+        else:
+            missing = [p["id"] for p in pairs if self.tuning_metric not in p["metrics"]]
+            if missing:
+                raise ValueError(
+                    f"tuning_metric '{self.tuning_metric}' is not in the metrics of pair(s) {missing} "
+                    f"of the {dataset_name} config"
+                )
+            num_metrics = len(pairs)
+        worst = SCORE_MIN * num_metrics
         return worst if self.mode == "max" else -worst
 
-    def _sum_results(self, results):
-        r"""Sum all metric values from the evaluation results.
+    def _tuned_pairs(self) -> list[dict[str, Any]]:
+        r"""Return the dataset config entries of the tuned pairs (all pairs when ``pair_ids`` is None)."""
+        return [p for p in self.dataset_config["pairs"] if self.pair_ids is None or p["id"] in self.pair_ids]
+
+    def _sum_results(self, results: dict[str, Any]) -> float:
+        r"""Sum metric values from the evaluation results.
 
         Iterates over ``results['pairs']`` and sums each pair's metric values.
+        When the dataset YAML sets ``tuning_metric``, only that metric is
+        summed (one value per pair); otherwise every metric is summed.
         run_opt only evaluates the pair_ids in the config, so all entries
         are for the requested pairs.
+
+        The results must cover every tuned pair (matched on each entry's
+        ``pair_id``). Otherwise a run that skipped a pair would get a smaller
+        sum, which is a better score under ``mode='min'``.
 
         Parameters
         ----------
         results : dict
             Evaluation results from run_opt (must have a ``pairs`` key with
-            list of dicts containing ``metrics``).
+            list of dicts containing ``pair_id`` and ``metrics``).
 
         Returns
         -------
         float
-            Sum of all metric values across all pairs.
+            Sum of the metric values across all pairs.
+
+        Raises
+        ------
+        ValueError
+            If the results do not cover every tuned pair. `_objective` then
+            returns ``failure_score``.
+        KeyError
+            If ``tuning_metric`` is set and a pair's results do not contain it.
         """
+        returned = {pair_dict.get("pair_id") for pair_dict in results["pairs"]}
+        missing = [p["id"] for p in self._tuned_pairs() if p["id"] not in returned]
+        if missing:
+            raise ValueError(f"Results have no entry for tuned pair(s) {missing}")
         total = 0
         for pair_dict in results["pairs"]:
             metric_dict = pair_dict["metrics"]
-            for metric in metric_dict:
-                total += metric_dict[metric]
+            if self.tuning_metric is not None:
+                if self.tuning_metric not in metric_dict:
+                    raise KeyError(f"tuning_metric '{self.tuning_metric}' missing from results of pair {pair_dict}")
+                total += metric_dict[self.tuning_metric]
+            else:
+                for metric in metric_dict:
+                    total += metric_dict[metric]
         return total
 
     def _create_search_space(self, tuning_config: dict[str, Any]) -> dict[str, Any]:
@@ -963,71 +1156,7 @@ class ModelTuner:
         caller_path = caller_frame.f_code.co_filename
         caller_dir = Path(caller_path).parent
 
-        parser = argparse.ArgumentParser(description=description)
-
-        # Basic arguments
-        parser.add_argument("--config-path", help="Path to the model's config file")
-        parser.add_argument(
-            "--model-name",
-            help="Specific model to tune (optional, will be inferred from config file orcurrent directory if not provided)",
-        )
-        parser.add_argument("--ray-results-dir", help="Directory for Ray temporary results (default: ~/ray_results)")
-
-        # Tuning parameters
-        tuning_group = parser.add_argument_group("Tuning Parameters")
-        tuning_group.add_argument(
-            "--time-budget-hours",
-            type=float,
-            default=24.0,
-            help="Maximum time budget for tuning in hours (default: 24.0)",
-        )
-        tuning_group.add_argument("--metric", default="score", help="Metric to optimize (default: score)")
-        tuning_group.add_argument(
-            "--mode",
-            choices=["min", "max"],
-            default="max",
-            help="Optimization mode: 'min' to minimize or 'max' to maximize the metric (default: max)",
-        )
-        tuning_group.add_argument(
-            "--gpus-per-trial",
-            type=int,
-            default=0,
-            help="Number of GPUs to use per trial (default: 0, meaning use all available GPUs)",
-        )
-
-        # Performance monitoring arguments
-        performance_group = parser.add_argument_group("Performance Monitoring (optional)")
-        performance_group.add_argument(
-            "--enable-performance-monitoring",
-            action="store_true",
-            help="Enable performance monitoring (average time per run)",
-        )
-        performance_group.add_argument(
-            "--performance-output-dir",
-            help="Directory to save performance results (default: results/performance_results)",
-        )
-
-        # ASHA scheduler arguments
-        asha_group = parser.add_argument_group("ASHA Scheduler (optional)")
-        asha_group.add_argument("--use-asha", action="store_true", help="Use ASHA scheduler for early stopping")
-        asha_group.add_argument(
-            "--asha-max-t", type=int, default=100, help="Maximum number of training iterations for ASHA (default: 100)"
-        )
-        asha_group.add_argument(
-            "--asha-grace-period",
-            type=int,
-            default=10,
-            help="Minimum number of iterations before stopping for ASHA (default: 10)",
-        )
-        asha_group.add_argument(
-            "--asha-reduction-factor",
-            type=int,
-            default=3,
-            help="Factor to reduce the number of trials for ASHA (default: 3)",
-        )
-        asha_group.add_argument("--asha-brackets", type=int, default=1, help="Number of brackets for ASHA (default: 1)")
-
-        args = parser.parse_args()
+        args = _build_parser(description).parse_args()
 
         # Prepare ASHA config if enabled
         asha_config = None

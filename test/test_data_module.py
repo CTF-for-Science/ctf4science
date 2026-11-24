@@ -9,10 +9,12 @@ import yaml
 from scipy.io import savemat
 
 from ctf4science.data_module import (
+    _forecast_windows,
     _load_mat_file,
     _load_npy_file,
     _load_npz_file,
     _load_test_data,
+    _window_starts,
     get_applicable_plots,
     get_config,
     get_metadata,
@@ -20,8 +22,14 @@ from ctf4science.data_module import (
     get_training_timesteps,
     get_validation_prediction_timesteps,
     get_validation_training_timesteps,
+    get_window_params,
+    is_lower_is_better,
+    is_windowed_pair,
+    load_building_ids,
     load_dataset,
+    load_forecast_windows,
     load_validation_dataset,
+    load_validation_forecast_windows,
     parse_pair_ids,
 )
 
@@ -815,11 +823,9 @@ class TestDataModule(unittest.TestCase):
 
     def test_get_applicable_plots_failure_undefined(self):
         """
-        Fail getting a list of applicable visualizations for the given dataset because a list of visualizations is not defined in the configuration file
+        Get an empty list of applicable visualizations because no visualizations are defined in the configuration file
         """
-        with self.assertRaises(ValueError) as context:
-            get_applicable_plots("dataset_1")
-        self.assertIn("No visualizations defined for dataset", str(context.exception))
+        self.assertListEqual([], get_applicable_plots("dataset_1"))
 
     def test_get_metadata_success(self):
         """
@@ -1406,3 +1412,374 @@ class TestDataModule(unittest.TestCase):
             self.assertIsNone(load_validation_dataset("dataset_9", 9, 0.8))
         self.assertIn("The provided pair_id", str(context.exception))
         self.assertIn("does not have initialization data", str(context.exception))
+
+
+def _building_series(n_rows: int, n_buildings: int, offset: int = 0) -> np.ndarray:
+    """Return a (time, building, channel) float32 series whose value encodes its position.
+
+    value = offset + building * 10000 + channel * 1000 + row, so every element can be traced back
+    to its row, building and channel (all values are exact in float32).
+    """
+    rows = np.arange(n_rows)[:, None, None]
+    buildings = np.arange(n_buildings)[None, :, None]
+    channels = np.arange(6)[None, None, :]
+    return (offset + buildings * 10000 + channels * 1000 + rows).astype(np.float32)
+
+
+class TestForecastWindows(unittest.TestCase):
+    """Windowed forecasting datasets (buildings): window function, forecast loaders and validation split."""
+
+    lookback = 4
+    stride = 3
+    n_sources = 5  # source building IDs
+    n_variants = 2  # columns per source building ID (e.g. excitation variants)
+    n_targets = 3
+    source_rows = 60
+    octdec_rows = 40
+    year2_rows = 50
+
+    @classmethod
+    def setUpClass(cls):
+        cls.temp_dir = tempfile.TemporaryDirectory()
+        cls.top_dir = Path(cls.temp_dir.name)
+        cls.patcher = patch("ctf4science.data_module.top_dir", cls.top_dir)
+        cls.patcher.start()
+
+        root = cls.top_dir / "data" / "bld"
+        (root / "train").mkdir(parents=True)
+        (root / "test").mkdir(parents=True)
+
+        # Source column c belongs to building ID src_{c % n_sources}, so the variants of a building are not adjacent
+        n_cols = cls.n_sources * cls.n_variants
+        cls.source_ids = [f"src_{c % cls.n_sources}" for c in range(n_cols)]
+        cls.sources = _building_series(cls.source_rows, n_cols)
+        cls.octdec = _building_series(cls.octdec_rows, cls.n_targets, offset=500000)
+        cls.year2 = _building_series(cls.year2_rows, cls.n_targets, offset=900000)
+        # Noisy weather: the 3 weather channels, negated so they differ from every clean value
+        cls.sources_noisy = -cls.sources[..., :3]
+        cls.octdec_noisy = -cls.octdec[..., :3]
+        cls.year2_noisy = -cls.year2[..., :3]
+
+        for name, array in (
+            ("train/sources.npz", cls.sources),
+            ("train/sources_noisy_weather.npz", cls.sources_noisy),
+            ("train/targets_PI_octdec.npz", cls.octdec),
+            ("train/targets_PI_octdec_noisy_weather.npz", cls.octdec_noisy),
+            ("test/targets_PI_year2.npz", cls.year2),
+            ("test/targets_PI_year2_noisy_weather.npz", cls.year2_noisy),
+        ):
+            np.savez(root / name, data=array)
+
+        with open(root / "building_ids.txt", "w") as f:
+            f.write("set\tcolumn\tbuilding_id\n")
+            f.writelines(f"sources\t{c}\t{building_id}\n" for c, building_id in enumerate(cls.source_ids))
+            f.writelines(f"targets_PI\t{b}\ttgt_{b}\n" for b in range(cls.n_targets))
+
+        def pair(pair_id, train, horizon, **extra):
+            return {
+                "id": pair_id,
+                "train": train,
+                "test": "targets_PI_year2.npz",
+                "horizon": horizon,
+                "metrics": ["mae", "rmse", "mase"],
+                **extra,
+            }
+
+        gen = ["sources.npz"]
+        fct = ["sources.npz", "targets_PI_octdec.npz"]
+        noisy = {"covariates": "noisy", "noisy_weather": "targets_PI_year2_noisy_weather.npz"}
+        cls.config = {
+            "lower_is_better": True,
+            "tuning_metric": "mae",
+            "evaluation_params": {
+                "lookback": cls.lookback,
+                "stride": cls.stride,
+                "target_channel": 4,
+                "covariate_channels": [0, 1, 2, 5],
+            },
+            "pairs": [
+                pair(1, gen, 1, stride=1),
+                pair(3, gen, 4, covariates="exact"),
+                pair(5, gen, 4, **noisy),
+                pair(7, fct, 1, stride=1),
+                pair(9, fct, 4, covariates="exact"),
+                pair(11, fct, 4, **noisy),
+                pair(20, gen, 4, covariates="noisy"),  # noisy without a noisy_weather file
+                pair(21, gen, 4, covariates="sometimes"),  # unknown covariates setting
+                pair(22, ["sources.npz", "targets_PI_octdec.npz", "sources.npz"], 4),  # too many train files
+                {"id": 30, "train": gen, "test": "targets_PI_year2.npz", "metrics": ["short_time"]},  # no horizon
+            ],
+            "metadata": {"delta_t": 900},
+        }
+        with open(root / "bld.yaml", "w") as f:
+            yaml.dump(cls.config, f)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.temp_dir.cleanup()
+        cls.patcher.stop()
+
+    def _source_ids_of(self, array: np.ndarray) -> list[str]:
+        """Building IDs of the source columns of an array cut from sources.npz (decoded from the values)."""
+        columns = (np.abs(array[0, :, 0]) // 10000).astype(int)
+        return [self.source_ids[c] for c in columns]
+
+    # Window function
+
+    def test_window_starts_counts(self):
+        """Window counts on a year of 15-minute data match the stride table in the plan."""
+        n_rows, lookback = 35040, 96
+        for horizon, stride, expected in ((1, 1, 34944), (96, 96, 364), (96, 97, 360), (96, 192, 182), (96, 1, 34849)):
+            starts = _window_starts(n_rows, lookback, horizon, stride)
+            self.assertEqual(len(starts), expected, (horizon, stride))
+            self.assertEqual(starts[0], 0)
+            np.testing.assert_array_equal(np.diff(starts), stride)
+            # The last window ends inside the array, and one more window would not
+            self.assertLessEqual(starts[-1] + lookback + horizon, n_rows)
+            self.assertGreater(starts[-1] + stride + lookback + horizon, n_rows)
+
+    def test_window_starts_edge_cases(self):
+        """A series exactly one window long has one window; a shorter one has none; bad parameters raise."""
+        self.assertListEqual(_window_starts(8, 4, 4, 3).tolist(), [0])
+        self.assertEqual(len(_window_starts(7, 4, 4, 3)), 0)
+        for bad in ((0, 4, 3), (4, 0, 3), (4, 4, 0), (4, 4, 1.5)):
+            with self.assertRaises(ValueError):
+                _window_starts(100, *bad)  # pyrefly: ignore
+
+    def test_forecast_windows_values_and_view(self):
+        """Windows hold the right rows and are views into the series, not copies."""
+        series = self.year2
+        lookback, horizon, stride = 4, 2, 3
+        starts = _window_starts(series.shape[0], lookback, horizon, stride)
+        past = _forecast_windows(series, lookback, horizon, stride, "lookback")
+        future = _forecast_windows(series, lookback, horizon, stride, "horizon")
+        self.assertEqual(past.shape, (len(starts), lookback, *series.shape[1:]))
+        self.assertEqual(future.shape, (len(starts), horizon, *series.shape[1:]))
+        for i, start in enumerate(starts):
+            np.testing.assert_array_equal(past[i], series[start : start + lookback])
+            np.testing.assert_array_equal(future[i], series[start + lookback : start + lookback + horizon])
+        self.assertTrue(np.shares_memory(past, series))
+        self.assertTrue(np.shares_memory(future, series))
+
+        # Works on 2D series too, and returns an empty array when no window fits
+        self.assertEqual(_forecast_windows(series[:, :, 4], lookback, horizon, stride, "horizon").shape[1:], (2, 3))
+        self.assertEqual(_forecast_windows(series[:5], lookback, horizon, stride, "lookback").shape, (0, 4, 3, 6))
+        with self.assertRaises(ValueError):
+            _forecast_windows(series, lookback, horizon, stride, "middle")
+
+    # Dataset and pair helpers
+
+    def test_is_windowed_pair(self):
+        """A pair is windowed exactly when it has a horizon; an unknown pair raises."""
+        for pair_id in (1, 3, 5, 7, 9, 11):
+            self.assertTrue(is_windowed_pair("bld", pair_id))
+        self.assertFalse(is_windowed_pair("bld", 30))
+        with self.assertRaises(ValueError) as context:
+            is_windowed_pair("bld", 999)
+        self.assertIn("does not exist", str(context.exception))
+
+    def test_is_lower_is_better(self):
+        """Only the YAML boolean true counts; absent, false and truthy non-booleans do not."""
+        self.assertTrue(is_lower_is_better(get_config("bld")))
+        self.assertTrue(is_lower_is_better({"lower_is_better": True}))
+        for config in ({}, {"lower_is_better": False}, {"lower_is_better": "yes"}, {"lower_is_better": 1}):
+            with self.subTest(config=config):
+                self.assertFalse(is_lower_is_better(config))
+
+    # Forecast loaders
+
+    def test_get_window_params_stride_override(self):
+        """A pair's own stride overrides the dataset default."""
+        self.assertDictEqual(get_window_params("bld", 1), {"lookback": 4, "horizon": 1, "stride": 1})
+        self.assertDictEqual(get_window_params("bld", 3), {"lookback": 4, "horizon": 4, "stride": 3})
+
+    def test_load_forecast_windows_no_covariates(self):
+        """A G1 pair returns lookback views at its own stride (1) and no covariates."""
+        loaded = []
+
+        def load_and_keep(*args, **kwargs):
+            loaded.append(_load_test_data(*args, **kwargs))
+            return loaded[-1]
+
+        with patch("ctf4science.data_module._load_test_data", side_effect=load_and_keep):
+            lookback, covariates = load_forecast_windows("bld", 1)
+        self.assertIsNone(covariates)
+        n_windows = self.year2_rows - self.lookback - 1 + 1
+        self.assertEqual(lookback.shape, (n_windows, self.lookback, self.n_targets, 6))
+        self.assertTrue(np.shares_memory(lookback, loaded[0]))
+        np.testing.assert_array_equal(lookback[-1], self.year2[n_windows - 1 : n_windows - 1 + self.lookback])
+
+    def test_load_forecast_windows_exact_covariates(self):
+        """A G2 pair uses the default stride and takes covariates from the clean test series."""
+        lookback, covariates = load_forecast_windows("bld", 3)
+        assert covariates is not None
+        n_windows = (self.year2_rows - self.lookback - 4) // self.stride + 1
+        self.assertEqual(lookback.shape, (n_windows, self.lookback, self.n_targets, 6))
+        self.assertEqual(covariates.shape, (n_windows, 4, self.n_targets, 4))
+        # Both window arrays are read-only
+        self.assertFalse(lookback.flags.writeable)
+        self.assertFalse(covariates.flags.writeable)
+        for i in range(n_windows):
+            start = i * self.stride
+            np.testing.assert_array_equal(lookback[i], self.year2[start : start + self.lookback])
+            horizon_rows = self.year2[start + self.lookback : start + self.lookback + 4]
+            np.testing.assert_array_equal(covariates[i], horizon_rows[..., [0, 1, 2, 5]])
+
+    def test_load_forecast_windows_noisy_covariates(self):
+        """A G3 pair takes weather from the noisy file and u from the clean series."""
+        lookback, covariates = load_forecast_windows("bld", 5)
+        _, exact = load_forecast_windows("bld", 3)
+        assert covariates is not None
+        assert exact is not None
+        self.assertEqual(covariates.shape, exact.shape)
+        rows = slice(self.lookback, self.lookback + 4)
+        np.testing.assert_array_equal(covariates[0, :, :, :3], self.year2_noisy[rows])
+        np.testing.assert_array_equal(covariates[..., 3], exact[..., 3])
+        self.assertFalse(np.array_equal(covariates[..., :3], exact[..., :3]))
+        # The lookback is clean
+        np.testing.assert_array_equal(lookback[0], self.year2[: self.lookback])
+
+    def test_load_forecast_windows_failures(self):
+        """Non-windowed pairs, noisy pairs without a noisy file and unknown covariate settings raise."""
+        with self.assertRaises(ValueError) as context:
+            load_forecast_windows("bld", 30)
+        self.assertIn("is not a windowed pair", str(context.exception))
+        with self.assertRaises(ValueError) as context:
+            load_forecast_windows("bld", 20)
+        self.assertIn("noisy_weather", str(context.exception))
+        with self.assertRaises(ValueError) as context:
+            load_forecast_windows("bld", 21)
+        self.assertIn("Unknown covariates setting", str(context.exception))
+        with self.assertRaises(ValueError) as context:
+            load_forecast_windows("bld", 999)
+        self.assertIn("does not exist", str(context.exception))
+
+    # Building IDs
+
+    def test_load_building_ids(self):
+        """building_ids.txt is read per set, in column order."""
+        ids = load_building_ids("bld")
+        self.assertListEqual(ids["sources"], self.source_ids)
+        self.assertListEqual(ids["targets_PI"], ["tgt_0", "tgt_1", "tgt_2"])
+
+    def test_load_building_ids_failures(self):
+        """A missing file, a wrong header and non-contiguous columns raise."""
+        root = self.top_dir / "data" / "bld_ids"
+        root.mkdir(parents=True, exist_ok=True)
+        with self.assertRaises(FileNotFoundError):
+            load_building_ids("bld_ids")
+        for content, message in (
+            ("sources\t0\ta\n", "must start with the header"),
+            ("set\tcolumn\tbuilding_id\nsources\t0\n", "expected 3 tab-separated fields"),
+            ("set\tcolumn\tbuilding_id\nsources\t0\ta\nsources\t2\tb\n", "are not 0..1"),
+            ("set\tcolumn\tbuilding_id\nsources\t0\ta\nsources\t1\tb\nsources\t0\tc\n", "column 0 twice"),
+        ):
+            (root / "building_ids.txt").write_text(content)
+            with self.assertRaises(ValueError) as context:
+                load_building_ids("bld_ids")
+            self.assertIn(message, str(context.exception))
+
+    # Validation loader
+
+    def test_validation_generalization_holds_out_building_ids(self):
+        """Generalization pairs hold out whole building IDs (every variant), absent from train."""
+        n_holdout = 2
+        train, lookback, covariates, truth = load_validation_forecast_windows("bld", 3, n_holdout=n_holdout)
+        assert covariates is not None
+        self.assertEqual(len(train), 1)
+        n_val_cols = n_holdout * self.n_variants
+        self.assertEqual(truth.shape, (self.source_rows, n_val_cols, 6))
+        self.assertEqual(train[0].shape, (self.source_rows, len(self.source_ids) - n_val_cols, 6))
+
+        val_ids = set(self._source_ids_of(truth))
+        train_ids = set(self._source_ids_of(train[0]))
+        self.assertEqual(len(val_ids), n_holdout)
+        self.assertTrue(val_ids.isdisjoint(train_ids))
+        self.assertEqual(val_ids | train_ids, set(self.source_ids))
+
+        # Windows are cut from the held-out series as for the test set
+        n_windows = (self.source_rows - self.lookback - 4) // self.stride + 1
+        self.assertEqual(lookback.shape, (n_windows, self.lookback, n_val_cols, 6))
+        self.assertEqual(covariates.shape, (n_windows, 4, n_val_cols, 4))
+        self.assertTrue(np.shares_memory(lookback, truth))
+        np.testing.assert_array_equal(
+            covariates[1], truth[self.stride + self.lookback : self.stride + 8][..., [0, 1, 2, 5]]
+        )
+
+        # The same seed gives the same split
+        _, _, _, truth_again = load_validation_forecast_windows("bld", 3, n_holdout=n_holdout)
+        np.testing.assert_array_equal(truth, truth_again)
+
+    def test_validation_generalization_noisy_and_no_covariates(self):
+        """G3 generalization covariates come from sources_noisy_weather.npz; G1 has none."""
+        _, _, covariates, truth = load_validation_forecast_windows("bld", 5, n_holdout=1, seed=3)
+        assert covariates is not None
+        columns = (truth[0, :, 0] // 10000).astype(int)
+        horizon_rows = slice(self.lookback, self.lookback + 4)
+        np.testing.assert_array_equal(covariates[0, :, :, :3], self.sources_noisy[horizon_rows][:, columns])
+        np.testing.assert_array_equal(covariates[0, :, :, 3], truth[horizon_rows, :, 5])
+
+        _, lookback, covariates, _ = load_validation_forecast_windows("bld", 1, n_holdout=1)
+        self.assertIsNone(covariates)
+        self.assertEqual(lookback.shape[0], self.source_rows - self.lookback)  # stride 1, horizon 1
+
+    def test_validation_forecasting_splits_in_time(self):
+        """Forecasting pairs keep all sources and split the target data in time, with no shared row."""
+        n_val_rows = 16
+        train, lookback, covariates, truth = load_validation_forecast_windows(
+            "bld", 9, n_holdout=999, n_val_rows=n_val_rows
+        )
+        assert covariates is not None
+        self.assertEqual(len(train), 2)
+        np.testing.assert_array_equal(train[0], self.sources)
+        split = self.octdec_rows - n_val_rows
+        np.testing.assert_array_equal(train[1], self.octdec[:split])
+        np.testing.assert_array_equal(truth, self.octdec[split:])
+        train_rows = set((train[1][:, 0, 0] % 1000).astype(int))
+        val_rows = set((truth[:, 0, 0] % 1000).astype(int))
+        self.assertTrue(train_rows.isdisjoint(val_rows))
+        self.assertEqual(len(train_rows) + len(val_rows), self.octdec_rows)
+
+        n_windows = (n_val_rows - self.lookback - 4) // self.stride + 1
+        self.assertEqual(lookback.shape, (n_windows, self.lookback, self.n_targets, 6))
+        self.assertEqual(covariates.shape, (n_windows, 4, self.n_targets, 4))
+        np.testing.assert_array_equal(lookback[0], truth[: self.lookback])
+
+    def test_validation_forecasting_noisy_covariates(self):
+        """G3 forecasting covariates come from the last rows of targets_*_octdec_noisy_weather.npz."""
+        n_val_rows = 16
+        _, _, covariates, truth = load_validation_forecast_windows("bld", 11, n_holdout=1, n_val_rows=n_val_rows)
+        assert covariates is not None
+        split = self.octdec_rows - n_val_rows
+        horizon_rows = slice(split + self.lookback, split + self.lookback + 4)
+        np.testing.assert_array_equal(covariates[0, :, :, :3], self.octdec_noisy[horizon_rows])
+        np.testing.assert_array_equal(covariates[0, :, :, 3], truth[self.lookback : self.lookback + 4, :, 5])
+
+    def test_validation_failures(self):
+        """Bad hold-out sizes, short validation series and malformed pairs raise."""
+        for n_holdout in (0, self.n_sources):
+            with self.assertRaises(ValueError) as context:
+                load_validation_forecast_windows("bld", 3, n_holdout=n_holdout)
+            self.assertIn("n_holdout", str(context.exception))
+        for n_val_rows in (0, self.octdec_rows):
+            with self.assertRaises(ValueError) as context:
+                load_validation_forecast_windows("bld", 9, n_holdout=1, n_val_rows=n_val_rows)
+            self.assertIn("n_val_rows", str(context.exception))
+        # Non-integers (e.g. 45.0 read from a YAML file) are rejected up front
+        for name, n_holdout, n_val_rows in (("n_holdout", 2.0, 16), ("n_val_rows", 1, 16.0), ("n_holdout", True, 16)):
+            for pair_id in (3, 9):
+                with (
+                    self.subTest(pair_id=pair_id, n_holdout=n_holdout, n_val_rows=n_val_rows),
+                    self.assertRaises(ValueError) as context,
+                ):
+                    load_validation_forecast_windows("bld", pair_id, n_holdout=n_holdout, n_val_rows=n_val_rows)  # pyrefly: ignore
+                self.assertIn(f"{name} must be an integer", str(context.exception))
+        with self.assertRaises(ValueError) as context:
+            load_validation_forecast_windows("bld", 9, n_holdout=1, n_val_rows=self.lookback + 3)
+        self.assertIn("shorter than lookback + horizon", str(context.exception))
+        with self.assertRaises(ValueError) as context:
+            load_validation_forecast_windows("bld", 22, n_holdout=1)
+        self.assertIn("one train file", str(context.exception))
+        with self.assertRaises(ValueError) as context:
+            load_validation_forecast_windows("bld", 30, n_holdout=1)
+        self.assertIn("is not a windowed pair", str(context.exception))

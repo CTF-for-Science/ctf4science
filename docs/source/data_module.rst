@@ -108,9 +108,10 @@ Key Functions
 
 Please refer to :doc:`api` for the full API of the data module. Main entry points:
 
-* **Config and discovery**: ``get_config``, ``get_metadata``, ``parse_pair_ids``, ``get_applicable_plots``
+* **Config and discovery**: ``get_config``, ``get_metadata``, ``parse_pair_ids``, ``get_applicable_plots``, ``is_lower_is_better``
 * **Loading**: ``load_dataset``, ``load_validation_dataset``
 * **Timesteps**: ``get_training_timesteps``, ``get_prediction_timesteps``, ``get_validation_training_timesteps``, ``get_validation_prediction_timesteps``
+* **Windowed forecasting pairs** (e.g. ``buildings``): ``is_windowed_pair``, ``get_window_params``, ``load_forecast_windows``, ``load_validation_forecast_windows``, ``load_building_ids``
 
 Data Formats
 ------------

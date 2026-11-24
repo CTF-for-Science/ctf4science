@@ -18,7 +18,11 @@ from ctf4science.eval_module import (
     extract_metrics_in_order,
     long_time_forecast_dynamical,
     long_time_forecast_spatio_temporal,
+    mae,
+    mase,
+    mase_scale,
     reconstruction,
+    rmse,
     save_results,
     short_time_forecast,
 )
@@ -649,3 +653,154 @@ class TestDataModule(unittest.TestCase):
             self.assertLess(results["average"], 100.0)
         finally:
             Path(csv_path).unlink(missing_ok=True)
+
+
+class TestWindowedMetrics(unittest.TestCase):
+    """MAE, RMSE and MASE on windowed forecasting pairs (buildings), with lower_is_better clipping."""
+
+    lookback = 2
+    # Errors added to each building's truth windows; building 2 is constant, so its MASE scale is 0
+    offsets = np.array([1.0, -3.0, 5.0])
+
+    @classmethod
+    def setUpClass(cls):
+        cls.temp_dir = tempfile.TemporaryDirectory()
+        cls.top_dir = Path(cls.temp_dir.name)
+        cls.patcher1 = patch("ctf4science.eval_module.top_dir", cls.top_dir)
+        cls.patcher2 = patch("ctf4science.data_module.top_dir", cls.top_dir)
+        cls.patcher1.start()
+        cls.patcher2.start()
+
+        # Continuous truth (time, building, channel): indoor temperature (channel 4) is t, 2t and 7
+        n_rows = cls.lookback + 3 * 96
+        t = np.arange(n_rows, dtype=np.float32)
+        rng = np.random.default_rng(0)
+        cls.truth = rng.normal(size=(n_rows, 3, 6)).astype(np.float32)
+        cls.truth[:, 0, 4] = t
+        cls.truth[:, 1, 4] = 2 * t
+        cls.truth[:, 2, 4] = 7.0
+
+        cls.config = {
+            "lower_is_better": True,
+            "evaluation_params": {
+                "lookback": cls.lookback,
+                "stride": 96,
+                "target_channel": 4,
+                "covariate_channels": [0, 1, 2, 5],
+            },
+            "pairs": [
+                # G1-like: one-step forecast from every step (stride override)
+                {
+                    "id": 1,
+                    "train": ["x.npz"],
+                    "test": "truth.npz",
+                    "horizon": 1,
+                    "stride": 1,
+                    "metrics": ["mae", "rmse", "mase"],
+                },
+                # G2-like: 96-step forecast at the default stride
+                {"id": 2, "train": ["x.npz"], "test": "truth.npz", "horizon": 96, "metrics": ["mae", "rmse", "mase"]},
+                # Not windowed (no horizon)
+                {"id": 3, "train": ["x.npz"], "test": "truth.npz", "metrics": ["reconstruction"]},
+            ],
+        }
+        root = cls.top_dir / "data" / "bld_eval"
+        (root / "test").mkdir(parents=True)
+        with open(root / "bld_eval.yaml", "w") as f:
+            yaml.dump(cls.config, f)
+        np.savez(root / "test" / "truth.npz", data=cls.truth)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.temp_dir.cleanup()
+        cls.patcher1.stop()
+        cls.patcher2.stop()
+
+    def _truth_windows(self, horizon: int, stride: int) -> np.ndarray:
+        """Truth windows (W, horizon, B) of the target channel, cut by hand."""
+        target = self.truth[:, :, 4]
+        starts = range(0, target.shape[0] - self.lookback - horizon + 1, stride)
+        return np.stack([target[s + self.lookback : s + self.lookback + horizon] for s in starts])
+
+    def _offset_prediction(self, horizon: int, stride: int) -> np.ndarray:
+        return self._truth_windows(horizon, stride) + self.offsets
+
+    def test_metric_functions(self):
+        """mae, rmse, mase_scale and mase against hand-computed values."""
+        truth = np.zeros((2, 3, 3))
+        prediction = truth + self.offsets
+        self.assertAlmostEqual(mae(truth, prediction), 3.0)
+        self.assertAlmostEqual(rmse(truth, prediction), np.sqrt(35 / 3))
+        np.testing.assert_allclose(mase_scale(self.truth[:, :, 4], 1), [1.0, 2.0, 0.0])
+        np.testing.assert_allclose(mase_scale(self.truth[:, :, 4], 96), [96.0, 192.0, 0.0])
+        # Building 2 has scale 0 and is left out of the mean
+        self.assertAlmostEqual(mase(truth, prediction, np.array([1.0, 2.0, 0.0])), (1 / 1 + 3 / 2) / 2)
+        with self.assertRaises(ValueError):
+            mase(truth, prediction, np.zeros(3))
+        with self.assertRaises(ValueError):
+            mase_scale(np.zeros((5, 3)), 5)
+
+    def test_evaluate_custom_lag_1(self):
+        """Horizon-1 pair: MASE uses the lag-1 naive scale from the continuous truth."""
+        prediction = self._offset_prediction(1, 1)
+        self.assertEqual(prediction.shape, (self.truth.shape[0] - self.lookback, 1, 3))
+        res = evaluate_custom("bld_eval", 1, self.truth, prediction)
+        self.assertAlmostEqual(res["mae"], 3.0, places=5)
+        self.assertAlmostEqual(res["rmse"], np.sqrt(35 / 3), places=5)
+        self.assertAlmostEqual(res["mase"], (1 / 1 + 3 / 2) / 2, places=5)
+
+    def test_evaluate_custom_lag_96(self):
+        """Horizon-96 pair: MASE uses the lag-96 naive scale; windows use the default stride."""
+        prediction = self._offset_prediction(96, 96)
+        self.assertEqual(prediction.shape, (3, 96, 3))
+        res = evaluate_custom("bld_eval", 2, self.truth, prediction)
+        self.assertAlmostEqual(res["mae"], 3.0, places=5)
+        self.assertAlmostEqual(res["rmse"], np.sqrt(35 / 3), places=5)
+        self.assertAlmostEqual(res["mase"], (1 / 96 + 3 / 192) / 2, places=7)
+
+    def test_evaluate_matches_evaluate_custom(self):
+        """evaluate (truth loaded from test/) and evaluate_custom score the same data identically."""
+        for pair_id, horizon, stride in ((1, 1, 1), (2, 96, 96)):
+            prediction = self._offset_prediction(horizon, stride)
+            self.assertEqual(
+                evaluate("bld_eval", pair_id, prediction), evaluate_custom("bld_eval", pair_id, self.truth, prediction)
+            )
+
+    def test_perfect_prediction_scores_zero(self):
+        """A perfect prediction scores 0 on every error metric."""
+        res = evaluate_custom("bld_eval", 2, self.truth, self._truth_windows(96, 96))
+        self.assertEqual(res, {"mae": 0.0, "rmse": 0.0, "mase": 0.0})
+
+    def test_lower_is_better_clip(self):
+        """With lower_is_better, very poor scores are clipped to 100."""
+        prediction = self._truth_windows(96, 96) + 1.0e6
+        self.assertGreater(mae(self._truth_windows(96, 96), prediction), 100.0)
+        res = evaluate_custom("bld_eval", 2, self.truth, prediction)
+        self.assertEqual(res, {"mae": 100.0, "rmse": 100.0, "mase": 100.0})
+        for score in res.values():
+            self.assertIsInstance(score, float)
+
+    def test_lower_is_better_nonfinite(self):
+        """With lower_is_better, a NaN or inf prediction scores 100 on every metric."""
+        for bad in (np.nan, np.inf, -np.inf):
+            prediction = self._truth_windows(96, 96).copy()
+            prediction[0, 0, 0] = bad
+            with patch("builtins.print"):
+                res = evaluate_custom("bld_eval", 2, self.truth, prediction)
+            self.assertEqual(res, {"mae": 100.0, "rmse": 100.0, "mase": 100.0})
+
+    def test_windowed_failures(self):
+        """Wrong prediction shapes, windowed truth and metrics of the wrong kind raise."""
+        prediction = self._truth_windows(96, 96)
+        with self.assertRaises(ValueError) as context:
+            evaluate_custom("bld_eval", 2, self.truth, prediction[:-1])
+        self.assertIn("does not match the truth windows", str(context.exception))
+        with self.assertRaises(ValueError) as context:
+            evaluate_custom("bld_eval", 2, self.truth[:, :, 4], prediction)
+        self.assertIn("continuous (time, building, channel) series", str(context.exception))
+        with self.assertRaises(ValueError) as context:
+            evaluate_custom("bld_eval", 2, self.truth, prediction, ["short_time"])
+        self.assertIn("only supported for non-windowed pairs", str(context.exception))
+        with self.assertRaises(ValueError) as context:
+            evaluate_custom("bld_eval", 3, np.ones((10, 3)), np.ones((10, 3)), ["mae"])
+        self.assertIn("only supported for windowed pairs", str(context.exception))

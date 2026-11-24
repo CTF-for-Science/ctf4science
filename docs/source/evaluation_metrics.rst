@@ -9,6 +9,8 @@ The Common Task Framework (CTF) for Science employs a standardized suite of 12 e
 
 Note: Not all dataset get their scores to correspond to the ``[-100, 100]`` range. The Lorenz dataset for example can produce large negative scores.
 
+The ``buildings`` dataset is the exception to this scale: it uses lower-is-better error metrics (``mae``, ``rmse``, ``mase``), described in `Error Metrics for Windowed Forecasting (buildings)`_.
+
 This document outlines each metric's purpose, method of evaluation, and its corresponding dataset pair.
 
 
@@ -183,6 +185,48 @@ Metric Descriptions
 * **Pair**: ID 9
 * **Measures**: Generalization to extrapolated dynamics.
 * **How**: Forecast skill in unseen extrapolated physical regimes.
+
+Error Metrics for Windowed Forecasting (buildings)
+--------------------------------------------------
+
+The :doc:`buildings <datasets>` dataset does not use E1–E12. Each of its pairs is scored with three error metrics on the indoor temperature, over every forecast window. They are lower-is-better: 0 is a perfect forecast.
+
+For a pair with a ``horizon``, ``evaluate_custom`` receives the *continuous* truth series ``(T, buildings, channels)`` (``evaluate`` passes the year-2 test file; validation passes the held-out series). It cuts the truth windows from the target channel with the same window function, lookback and stride as ``load_forecast_windows``, so predictions and truth always line up, and it checks that the prediction has the shape ``(W, horizon, buildings)``.
+
+Write the prediction as :math:`\hat{y}_{w,h,b}` and the truth windows as :math:`y_{w,h,b}`, for window :math:`w`, horizon step :math:`h` and building :math:`b`.
+
+**mae – Mean Absolute Error**
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The mean of :math:`|\hat{y}_{w,h,b} - y_{w,h,b}|` over all buildings, windows and horizon steps, in kelvin.
+
+**rmse – Root Mean Squared Error**
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The root of the mean of :math:`(\hat{y}_{w,h,b} - y_{w,h,b})^2`, pooled over all buildings, windows and horizon steps, in kelvin.
+
+**mase – Mean Absolute Scaled Error**
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each building's MAE divided by the MAE of a naive forecast for that building, averaged over buildings:
+
+.. math::
+
+   \text{MASE} = \frac{1}{|B'|} \sum_{b \in B'} \frac{\text{MAE}_b}{s_b},
+   \qquad
+   s_b = \frac{1}{T - m} \sum_{t=m}^{T-1} |x_{t,b} - x_{t-m,b}|
+
+where :math:`x_{t,b}` is the continuous truth series of the target channel and the naive lag :math:`m` equals the pair's horizon: lag 1 (the previous 15-minute value) for the one-step G1 pairs and lag 96 (the same time the day before) for the 96-step G2 and G3 pairs. The scale is computed from the whole continuous series, which windowed truth could not provide (a horizon-1 window has no lag-1 difference). Buildings whose scale is 0 are left out (:math:`B'` is the set of buildings with :math:`s_b > 0`). A MASE of 1 means as good as the naive forecast on average; persistence scores 1.00 on the G1 pairs at stride 1.
+
+Clipping and failed predictions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A dataset whose YAML sets ``lower_is_better: true`` (as ``buildings`` does) is scored on the range [0, 100] instead of [-100, 100]:
+
+* every score is clipped to [0, ``SCORE_MAX``] = [0, 100], so a very poor forecast cannot dominate sums and benchmark means;
+* a prediction containing NaN or inf scores 100 (not -100) on every metric, so the worst score stays finite.
+
+An error of 100 K, or a MASE of 100, is far beyond any working model. Datasets without ``lower_is_better`` are scored exactly as before. The tuner minimises these scores; see :doc:`tune_module`.
 
 ----
 
